@@ -60,6 +60,7 @@ freeze_hand=True
 
 
 class MLP_feat(nn.Module):
+    # feature transformation from input_size to output_size
     def __init__(self, input_size, output_size,hidden_size):
         super(MLP_feat, self).__init__()
         self.mlpmodel = nn.Sequential(
