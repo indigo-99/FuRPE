@@ -1,19 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Max-Planck-Gesellschaft zur Förderung der Wissenschaften e.V. (MPG) is
-# holder of all proprietary rights on this computer program.
-# You can only use this computer program if you have closed
-# a license agreement with MPG or you get the right to use the computer
-# program from someone who is authorized to grant you that right.
-# Any use of the computer program without a valid license is prohibited and
-# liable to prosecution.
-#
-# Copyright©2020 Max-Planck-Gesellschaft zur Förderung
-# der Wissenschaften e.V. (MPG). acting on behalf of its Max Planck Institute
-# for Intelligent Systems. All rights reserved.
-#
-# Contact: ps-license@tuebingen.mpg.de
-
 import sys
 import os
 import os.path as osp
@@ -94,6 +80,9 @@ def weak_persp_to_blender(
 
 
 def undo_img_normalization(image, mean, std, add_alpha=True):
+    '''
+    transform image back to normal state
+    '''
     if torch.is_tensor(image):
         image = image.detach().cpu().numpy().squeeze()
 
@@ -128,11 +117,12 @@ def main(
     logger.add(lambda x: tqdm.write(x, end=''),
                level=exp_cfg.logger_level.upper(),
                colorize=True)
-
-    demo_output_folder = osp.expanduser(osp.expandvars(demo_output_folder))
-    logger.info(f'Saving results to: {demo_output_folder}')
-    print('saving results to:',demo_output_folder)
-    os.makedirs(demo_output_folder, exist_ok=True)
+    
+    # # output the predicted results to output_folder, not needed during evaluation
+    # demo_output_folder = osp.expanduser(osp.expandvars(demo_output_folder))
+    # logger.info(f'Saving results to: {demo_output_folder}')
+    # print('saving results to:',demo_output_folder)
+    # os.makedirs(demo_output_folder, exist_ok=True)
 
     model = SMPLXNet(exp_cfg)
     try:
@@ -145,40 +135,35 @@ def main(
         exp_cfg.output_folder, exp_cfg.checkpoint_folder)
     checkpointer = Checkpointer(model, save_dir=checkpoint_folder,
                                 pretrained=exp_cfg.pretrained)
-
-    arguments = {'iteration': 0, 'epoch_number': 0}
+    
+    # load checkpoint to the current model
     extra_checkpoint_data = checkpointer.load_checkpoint()
-    for key in arguments:
-        if key in extra_checkpoint_data:
-            arguments[key] = extra_checkpoint_data[key]
 
     model = model.eval()
 
+    dataloaders = make_all_data_loaders(exp_cfg, split='test')
+
+    # add evaluation (expose/evaluation.py):
+    with Evaluator(exp_cfg) as evaluator:
+        evaluator.run(model, dataloaders, exp_cfg, device)
+
+    '''
+    # show/save of predicted results, not needed during evaluation on test datasets
+    total_time = 0
+    cnt = 0
+    
     means = np.array(exp_cfg.datasets.body.transforms.mean)
     std = np.array(exp_cfg.datasets.body.transforms.std)
 
     render = save_vis or show
+    
     body_crop_size = exp_cfg.get('datasets', {}).get('body', {}).get(
         'transforms').get('crop_size', 256)
     #if render:
         #hd_renderer = HDRenderer(img_size=body_crop_size)
-
-    dataloaders = make_all_data_loaders(exp_cfg, split='test')
-
-    body_dloader = dataloaders['body'][0]
     
-    #P add: evaluation:
-    #evaluator=Evaluator(exp_cfg)
-    #evaluator.run(model, dataloaders, exp_cfg, device)
-    # change format to run evaluator.__enter__() method
-    with Evaluator(exp_cfg) as evaluator:
-        evaluator.run(model, dataloaders, exp_cfg, device)
-
-    total_time = 0
-    cnt = 0
-    
-    '''
     import vis_inference
+    body_dloader = dataloaders['body'][0]
     for bidx, batch in enumerate(tqdm(body_dloader, dynamic_ncols=True)):
 
         full_imgs_list, body_imgs, body_targets = batch
@@ -395,7 +380,7 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
     arg_formatter = argparse.ArgumentDefaultsHelpFormatter
-    description = 'PyTorch SMPL-X Regressor Demo'
+    description = 'PyTorch Exmodel Evaluation'
     parser = argparse.ArgumentParser(formatter_class=arg_formatter,
                                      description=description)
 
@@ -449,8 +434,9 @@ if __name__ == '__main__':
     use_face_contour = cfg.datasets.use_face_contour
     logger.info('use_face_contour: {}',use_face_contour)
     logger.info('cmd_datasets: {}',cmd_args.datasets)
-    if 'threedpw' in cmd_args.datasets:#list
-        use_face_contour=False
+    # 3dpw only contrains body keypoints
+    if 'threedpw' in cmd_args.datasets:
+        use_face_contour = False
     set_face_contour(cfg, use_face_contour=use_face_contour)
 
     with threadpool_limits(limits=1):
