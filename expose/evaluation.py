@@ -14,8 +14,6 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-import sys
-
 import os
 import os.path as osp
 
@@ -28,8 +26,6 @@ import torch
 import torch.nn.functional as F
 
 from torchvision.utils import make_grid
-import matplotlib.cm as mpl_cm
-import matplotlib.colors as mpl_colors
 import pickle
 
 import tqdm
@@ -48,7 +44,7 @@ from .utils.plot_utils import (
     blend_images,
 )
 
-# Joint selectors
+# Joints selectors for computing metrics (eg: mpjpe)
 # Indices to get the 14 LSP joints from the 17 H36M joints
 H36M_TO_J17 = [6, 5, 4, 1, 2, 3, 16, 15, 14, 11, 12, 13, 8, 10, 0, 7, 9]
 H36M_TO_J14 = H36M_TO_J17[:14]
@@ -56,42 +52,36 @@ H36M_TO_J14 = H36M_TO_J17[:14]
 J24_TO_J17 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 14, 16, 17]
 J24_TO_J14 = J24_TO_J17[:14]
 
+
 def make_filter(name):
+    ''' set a filter for records of the "name" metric during logging
+    '''
     def filter(record):
         return record['extra'].get('key_name') == name
     return filter
 
 
 class Evaluator(object):
-    def __init__(self, exp_cfg, rank=0, distributed=False):
+    '''the class for evaluation the current model's effect on certain test datasets
+    '''
+    def __init__(self, exp_cfg, distributed=False):
         super(Evaluator, self).__init__()
-        self.rank = rank
-        self.distributed = distributed
-
+        # distribute the model on different devices or not (default: False)
+        self.distributed = distributed 
+        # transparency of visualization, defined in config.yaml
         self.alpha_blend = exp_cfg.get('alpha_blend', 0.7)
+        
+        # 14 joints regressor's stored path, to regress the predicted / ground truth vertices to L14 joints
         j14_regressor_path = exp_cfg.j14_regressor_path
         with open(j14_regressor_path, 'rb') as f:
             self.J14_regressor = pickle.load(f, encoding='latin1')
         
-        #p add: SPIN J14 regressor
+        # add: SPIN J14 regressor, to regress SMPL (not SMPLX) vertices to L14 joints
+        # only used in evaluation on the 3DPW testset
         j14_regressor_path = 'data/J_regressor_h36m.npy'
         self.J14_regressor_SMPL = np.load(j14_regressor_path, encoding='latin1',allow_pickle=True)
 
-        smplx_valid_verts_fn = osp.expandvars(
-            exp_cfg.get('smplx_valid_verts_fn', ''))
-        self.use_body_verts = osp.exists(smplx_valid_verts_fn)
-        if self.use_body_verts:
-            self.use_hands_for_shape = exp_cfg.get(
-                'use_hands_for_shape', False)
-            verts_data = np.load(smplx_valid_verts_fn)
-            if self.use_hands_for_shape:
-                # First column should be SMPL vertices
-                self.smplx_valid_verts = verts_data['mapping'][:, 1]
-            else:
-                self.smplx_valid_verts = verts_data['no_hands_mapping'][:, 1]
-            self.smplx_valid_verts = np.asarray(
-                self.smplx_valid_verts, dtype=np.int64)
-
+        # read body vertex ids in the whole vertices, for computing the body_v2v_error
         body_vertex_ids_path = osp.expandvars(
             exp_cfg.get('body_vertex_ids_path', ''))
         body_vertex_ids = None
@@ -99,6 +89,7 @@ class Evaluator(object):
             body_vertex_ids = np.load(body_vertex_ids_path).astype(np.int32)
         self.body_vertex_ids = body_vertex_ids
 
+        # read face vertex ids in the whole vertices, for computing the face_v2v_error
         face_vertex_ids_path = osp.expandvars(
             exp_cfg.get('face_vertex_ids_path', ''))
         face_vertex_ids = None
@@ -106,6 +97,7 @@ class Evaluator(object):
             face_vertex_ids = np.load(face_vertex_ids_path).astype(np.int32)#(5023,)
         self.face_vertex_ids = face_vertex_ids
 
+        # read hand vertex ids in the whole vertices, for computing the left/right_hand_v2v_error
         hand_vertex_ids_path = osp.expandvars(
             exp_cfg.get('hand_vertex_ids_path', ''))
         left_hand_vertex_ids, right_hand_vertex_ids = None, None
@@ -114,48 +106,45 @@ class Evaluator(object):
                 vertex_idxs_data = pickle.load(f, encoding='latin1')
             left_hand_vertex_ids = vertex_idxs_data['left_hand']#(778,)
             right_hand_vertex_ids = vertex_idxs_data['right_hand']#(778,)
-
         self.left_hand_vertex_ids = left_hand_vertex_ids
         self.right_hand_vertex_ids = right_hand_vertex_ids
 
-        #p add: because body_vertex_ids not exist, making body PA-V2V error missing
+        # if body_vertex_ids not exist, body PA-V2V error cannot be computed, so generate it according to hand/face ids (downloaded from github)
         if self.body_vertex_ids is None:
-            hand_face_ids=list(self.face_vertex_ids)+list(self.left_hand_vertex_ids)+list(self.right_hand_vertex_ids)
-            body_vertex_ids=[i for i in range(10475) if i not in hand_face_ids]
-            self.body_vertex_ids=np.array(body_vertex_ids)
-            save_body_vertex_ids_path='data/body_vertex_ids.npy'
+            hand_face_ids = list(self.face_vertex_ids) + list(self.left_hand_vertex_ids) + list(self.right_hand_vertex_ids)
+            body_vertex_ids = [i for i in range(10475) if i not in hand_face_ids]
+            self.body_vertex_ids = np.array(body_vertex_ids)
+            save_body_vertex_ids_path = 'data/body_vertex_ids.npy'
+            # save the results for ensuing use
             if not osp.exists(save_body_vertex_ids_path):
                 np.save(save_body_vertex_ids_path, self.body_vertex_ids)
 
+        # the number of imgs showed per row in the evaluation summary
         self.imgs_per_row = exp_cfg.get('imgs_per_row', 2)
-
-        self.save_part_v2v = exp_cfg.save_part_v2v
-
         self.exp_cfg = exp_cfg.clone()
-        self.output_folder = osp.expandvars(exp_cfg.output_folder)
 
+        # the output folder of the evaluation summary
+        self.output_folder = osp.expandvars(exp_cfg.output_folder)
         self.summary_folder = osp.join(self.output_folder,
                                        exp_cfg.summary_folder)
         os.makedirs(self.summary_folder, exist_ok=True)
         self.summary_steps = exp_cfg.summary_steps
 
+        # the output folder of logs
         self.results_folder = osp.join(self.output_folder,
                                        exp_cfg.results_folder)
         os.makedirs(self.results_folder, exist_ok=True)
         self.loggers = defaultdict(lambda: None)
 
+        # the degrees of visualization imgs saved in summary
         self.body_degrees = exp_cfg.get('degrees', {}).get(
             'body', [90, 180, 270])
-        self.hand_degrees = exp_cfg.get('degrees', {}).get(
-            'hand', [90, 180, 270])
-        self.head_degrees = exp_cfg.get('degrees', {}).get(
-            'head', [90, 180, 270])
 
         self.body_alignments = {'procrustes': ProcrustesAlignmentMPJPE(),
                                 'pelvis': PelvisAlignmentMPJPE(),
-                                'root':RootAlignmentMPJPE(), # p add
+                                'root':RootAlignmentMPJPE(), # not used in expose's experiments
                                 }
-        hand_fscores_thresh = exp_cfg.get('fscores_thresh', {}).get(
+        '''hand_fscores_thresh = exp_cfg.get('fscores_thresh', {}).get(
             'hand', [5.0 / 1000, 15.0 / 1000])
         self.hand_fscores_thresh = hand_fscores_thresh
 
@@ -168,44 +157,49 @@ class Evaluator(object):
         self.head_fscores_thresh = head_fscores_thresh
         self.head_alignments = {
             'procrustes': ProcrustesAlignmentMPJPE(
-                fscore_thresholds=head_fscores_thresh)}
+                fscore_thresholds=head_fscores_thresh)}'''
 
-        self.plot_conf_thresh = exp_cfg.plot_conf_thresh
-
+        # self.plot_conf_thresh = exp_cfg.plot_conf_thresh # 0.3 in config.yaml, but not be used in the following code
+        # get the idxs of each part in the whole body vertices
         idxs_dict = get_part_idxs()
         self.body_idxs = idxs_dict['body']
         self.hand_idxs = idxs_dict['hand']
         self.left_hand_idxs = idxs_dict['left_hand']
         self.right_hand_idxs = idxs_dict['right_hand']
-        self.flame_idxs = idxs_dict['flame']
+        #self.flame_idxs = idxs_dict['flame']
 
+        # used in data preprocessing, so need to transform imgs back to normal according to them as well
         self.means = np.array(self.exp_cfg.datasets.body.transforms.mean)
         self.std = np.array(self.exp_cfg.datasets.body.transforms.std)
 
+        # renderer for each part (show predicted vertices on the raw imgs)
         body_crop_size = exp_cfg.get('datasets', {}).get('body', {}).get(
             'crop_size', 256)
         self.body_renderer = OverlayRenderer(img_size=body_crop_size)
-
+        '''
         hand_crop_size = exp_cfg.get('datasets', {}).get('hand', {}).get(
             'crop_size', 256)
         self.hand_renderer = OverlayRenderer(img_size=hand_crop_size)
 
         head_crop_size = exp_cfg.get('datasets', {}).get('head', {}).get(
             'crop_size', 256)
-        self.head_renderer = OverlayRenderer(img_size=head_crop_size)
-
+        self.head_renderer = OverlayRenderer(img_size=head_crop_size)'''
+        
+        # ground truth renderer 
         self.render_gt_meshes = exp_cfg.get('render_gt_meshes', True)
         if self.render_gt_meshes:
             self.gt_body_renderer = GTRenderer(img_size=body_crop_size)
-            self.gt_hand_renderer = GTRenderer(img_size=hand_crop_size)
-            self.gt_head_renderer = GTRenderer(img_size=head_crop_size)
+            #self.gt_hand_renderer = GTRenderer(img_size=hand_crop_size)
+            #self.gt_head_renderer = GTRenderer(img_size=head_crop_size)
 
     @torch.no_grad()
     def __enter__(self):
+        ''' save summary by the SummaryWriter '''
         self.filewriter = SummaryWriter(self.summary_folder, max_queue=1)
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
+        ''' close the filewriter after evaluation '''
         self.filewriter.close()
 
     def create_summaries(self, step, dset_name, images, targets,
@@ -218,12 +212,16 @@ class Evaluator(object):
             degrees = []
 
         crop_size = images.shape[-1]
-
+        
+        # transform images back to normal according to the preprocessing params
         imgs = (images * self.std[np.newaxis, :, np.newaxis, np.newaxis] +
                    self.means[np.newaxis, :, np.newaxis, np.newaxis])
+        
+        # contents to save in summary (the same as mytrain.py)
         summary_imgs = OrderedDict()
-        summary_imgs['rgb'] = imgs
+        summary_imgs['rgb'] = imgs # the first column to be raw imgs
 
+        # ground truth 2d keypoints imgs
         gt_keyp_imgs = []
         for img_idx in range(imgs.shape[0]):
             input_img = np.ascontiguousarray(
@@ -246,10 +244,9 @@ class Evaluator(object):
             gt_keyp_img = np.transpose(gt_keyp_img, [2, 0, 1])
             gt_keyp_imgs.append(gt_keyp_img)
         gt_keyp_imgs = np.stack(gt_keyp_imgs)
-
-        # Add the ground-truth keypoints
         summary_imgs['gt_keypoints'] = gt_keyp_imgs
 
+        # predicted 2d keypoints imgs
         proj_joints = model_output.get('proj_joints', None)
         if proj_joints is not None:
             proj_points = model_output[
@@ -277,11 +274,12 @@ class Evaluator(object):
             reproj_joints_imgs = np.stack(reproj_joints_imgs)
             summary_imgs['proj_joints'] = reproj_joints_imgs
 
+        # render ground truth meshes on imgs
         render_gt_meshes = (self.render_gt_meshes and
                             any([t.has_field('vertices') for t in targets]))
         if render_gt_meshes:
             gt_mesh_imgs = []
-            faces = model_output['faces']
+            faces = model_output['faces'] # not human's face, but the facets of meshes
             for bidx, t in enumerate(targets):
                 if not (t.has_field('vertices') and t.has_field('intrinsics')):
                     gt_mesh_imgs.append(np.zeros_like(imgs[bidx]))
@@ -289,7 +287,7 @@ class Evaluator(object):
 
                 curr_gt_vertices = t.get_field(
                     'vertices').vertices.detach().cpu().numpy().squeeze()
-                intrinsics = t.get_field('intrinsics')
+                intrinsics = t.get_field('intrinsics') # intrinsic camera parameters
 
                 mesh_img = gt_renderer(
                     curr_gt_vertices[np.newaxis], faces=faces,
@@ -306,6 +304,7 @@ class Evaluator(object):
                 [[0, 0], [0, 0], [row_pad, row_pad], [row_pad, row_pad]])
             summary_imgs['gt_meshes'] = gt_mesh_imgs
 
+        # render predicted meshes on imgs
         vertices = model_output.get('vertices', None)
         if vertices is not None:
             body_imgs = []
@@ -321,9 +320,9 @@ class Evaluator(object):
                 bg_imgs=imgs,
                 return_with_alpha=False,
             )
-            # Add the rendered meshes
             summary_imgs['overlay'] = body_imgs.copy()
 
+            # add rendered images in different digrees
             for deg in degrees:
                 body_imgs = renderer(
                     vertices, faces,
@@ -333,6 +332,7 @@ class Evaluator(object):
                 )
                 summary_imgs[f'{deg:03d}'] = body_imgs.copy()
 
+        # save summary_imgs
         summary_imgs = np.concatenate(
             list(summary_imgs.values()), axis=3)
         img_grid = make_grid(
@@ -343,6 +343,8 @@ class Evaluator(object):
         return
 
     def build_metric_logger(self, name):
+        '''build a recorder of the "name" metric, savve results to output_fn
+        '''
         output_fn = osp.join(
             self.results_folder, name + '.log')
         if self.loggers[name] is None:
@@ -353,6 +355,15 @@ class Evaluator(object):
                       alignments,
                       gt_joint_idxs=None,
                       joint_idxs=None):
+        '''compute the mpjpg metric for evaluation
+            input: 
+                model_joints: the predicted 3d keypoints from out model
+                targets: ground truth data
+                alignments: the alignment methods used to compute the mpjpe metric
+                gt_joint_idxs: the idxs of ground truth keypoints needed in mpjpe computation
+                joint_idxs: the idxs of predicted keypoints needed in mpjpe computation
+        '''  
+        # ground truth 3d keypoints
         gt_keyps = [target.get_field(
             'keypoints3d'). smplx_keypoints.detach().cpu().numpy()
             for target in targets
@@ -363,10 +374,10 @@ class Evaluator(object):
         idxs = [idx
                 for idx, target in enumerate(targets)
                 if target.has_field('keypoints3d')]
+        
         if len(gt_keyps) < 1:
-            #print('model_joints dtype: ',model_joints.dtype)
             out_array = {
-                key: np.zeros(model_joints.shape[:2], dtype=np.float32)#model_joints.dtype)
+                key: np.zeros(model_joints.shape[:2], dtype=np.float32)
                 for key in alignments
             }
             return {'error': defaultdict(lambda: 0.0),
@@ -390,6 +401,7 @@ class Evaluator(object):
         num_valid_joints = (gt_conf > 0).sum()
         idxs = np.asarray(idxs)
 
+        # compute the mpjpe value for each alignment method
         mpjpe_err = {}
         for alignment_name, alignment in alignments.items():
             mpjpe_err[alignment_name] = []
@@ -407,6 +419,13 @@ class Evaluator(object):
         }
 
     def compute_v2v(self, model_vertices, targets, alignments, vids=None):
+        '''compute the v2v error metric for evaluation
+            input: 
+                model_vertices: the predicted vertices from out model
+                targets: ground truth data
+                alignments: the alignment methods used to compute the mpjpe metric
+                vids: vertex ids needed to computing the v2v error, if None, use all vertexs
+        '''  
         if model_vertices is None:
             return {'valid': 0,
                     'fscore': {},
@@ -425,6 +444,7 @@ class Evaluator(object):
             return {'fscore': {},
                     'valid': 0, 'point': out_array}
         gt_vertices = np.array(gt_vertices)
+
         if torch.is_tensor(model_vertices):
             model_vertices = model_vertices.detach().cpu().numpy()
 
@@ -434,6 +454,7 @@ class Evaluator(object):
 
         v2v_err = {}
         fscores = {}
+        # compute v2v errors of different alignment methods
         for alignment_name, alignment in alignments.items():
             v2v_err[alignment_name] = []
             fscores[alignment_name] = defaultdict(lambda: [])
@@ -442,6 +463,7 @@ class Evaluator(object):
                 align_out = alignment(
                     model_vertices[bidx], gt_vertices[bidx])
                 v2v_err[alignment_name].append(align_out['point'])
+                
                 for thresh, val in align_out['fscore'].items():
                     fscores[alignment_name][thresh].append(
                         val['fscore'].copy())
@@ -450,249 +472,19 @@ class Evaluator(object):
             for thresh in fscores[alignment_name]:
                 fscores[alignment_name][thresh] = np.stack(
                     fscores[alignment_name][thresh])
-            #  logger.info(f'{alignment_name}: {v2v_err[alignment_name].shape}')
 
         return {'point': v2v_err, 'fscore': fscores}
 
-    def run_head_eval(self, dataloaders, model, step, alignments=None,
-                      device=None):
-        head_model = model.get_head_model()
-        if alignments is None:
-            alignments = {'procrustes': ProcrustesAlignmentMPJPE(),
-                          'root': RootAlignmentMPJPE()}
-        if device is None:
-            device = torch.device('cpu')
-
-        for dataloader in dataloaders:
-            dset = dataloader.dataset
-            dset_name = dset.name()
-            dset_metrics = dset.metrics
-
-            compute_v2v = 'v2v' in dset_metrics
-            if compute_v2v:
-                v2v_err = {key: [] for key in alignments}
-                self.build_metric_logger(f'{dset_name}_v2v')
-
-                fscores = {}
-                for alignment_name in alignments:
-                    fscores[alignment_name] = {}
-                    for thresh in self.head_fscores_thresh:
-                        fscores[alignment_name][thresh] = []
-                        self.build_metric_logger(
-                            f'{dset_name}_fscore_{thresh}')
-
-            desc = f'Evaluating dataset: {dset_name}'
-            for idx, batch in enumerate(
-                    tqdm.tqdm(dataloader, desc=desc, dynamic_ncols=True)):
-                _, head_imgs, head_targets = batch
-
-                head_imgs = head_imgs.to(device=device)
-                head_targets = [t.to(device=device) for t in head_targets]
-
-                model_output = head_model(head_imgs=head_imgs,
-                                          num_head_imgs=len(head_imgs))
-
-                head_vertices = model_output.get('vertices')
-
-                out_params = {}
-                for key, val in model_output.items():
-                    if not torch.is_tensor(val):
-                        continue
-                    out_params[key] = val.detach().cpu().numpy()
-
-                if compute_v2v:
-                    v2v_output = self.compute_v2v(
-                        head_vertices, head_targets, alignments)
-                    for alignment_name, val in v2v_output['point'].items():
-                        v2v_err[alignment_name].append(val.copy())
-
-                    for alignment_name, val in v2v_output['fscore'].items():
-                        for thresh, fscore_val in val.items():
-                            fscores[alignment_name][thresh].append(
-                                fscore_val)
-                if idx == 0:
-                    camera_parameters = model_output.get('camera_parameters')
-                    self.create_summaries(
-                        step, dset_name,
-                        head_imgs.detach().cpu().numpy(),
-                        head_targets,
-                        model_output,
-                        camera_parameters=camera_parameters,
-                        degrees=self.head_degrees,
-                        renderer=self.head_renderer,
-                        gt_renderer=self.gt_head_renderer,
-                        prefix='Head',
-                    )
-
-            if compute_v2v:
-                for key, val in v2v_err.items():
-                    val = np.concatenate(val, axis=0)
-                    # Divide by the number of items in the dataset and the
-                    # number of vertices
-                    metric_value = val.mean() * 1000
-                    alignment_name = key.title()
-
-                    self.loggers[f'{dset_name}_v2v'].info(
-                        '[{:06d}] {}: Vertex-To-Vertex/{}: {:.4f} mm',
-                        step, dset_name, alignment_name, metric_value)
-
-                    metric_name = f'{dset_name}/{alignment_name}/Head_V2V'
-                    #  summary_dict[metric_name] = val
-                    self.filewriter.add_scalar(metric_name, metric_value, step)
-
-                for alignment_name, val in fscores.items():
-                    for thresh, fscore_arr in val.items():
-                        fscore_arr = np.concatenate(fscore_arr)
-                        if len(fscore_arr) < 1:
-                            continue
-                        metric_value = np.asarray(fscore_arr).mean()
-                        logger.info(
-                            '[{:06d}] {}: F-Score@{:.1f}/{}: {:.3f} ',
-                            step, dset_name, thresh * 1000,
-                            alignment_name, metric_value)
-
-                        summary_name = (f'{dset_name}/F@{thresh * 1000:.1f}/'
-                                        f'{alignment_name}')
-                        self.filewriter.add_scalar(
-                            summary_name, metric_value, step)
-        return
-
-    def run_hand_eval(self, dataloaders, model, step, alignments=None,
-                      device=None):
-        hand_model = model.get_hand_model()
-        if alignments is None:
-            alignments = {'procrustes': ProcrustesAlignmentMPJPE(),
-                          'root': RootAlignmentMPJPE()}
-        if device is None:
-            device = torch.device('cpu')
-
-        for dataloader in dataloaders:
-            dset = dataloader.dataset
-            dset_name = dset.name()
-            dset_metrics = dset.metrics
-
-            compute_mpjpe = 'mpjpe' in dset_metrics
-            if compute_mpjpe:
-                hand_valid = 0
-                mpjpe_err = {
-                    alignment_name: [] for alignment_name in alignments}
-                self.build_metric_logger(f'{dset_name}_mpjpe')
-                self.build_metric_logger(f'{dset_name}_hand_mpjpe')
-
-            compute_v2v = 'v2v' in dset_metrics
-            if compute_v2v:
-                v2v_err = {key: [] for key in alignments}
-                self.build_metric_logger(f'{dset_name}_v2v')
-
-                fscores = {}
-                for alignment_name in alignments:
-                    fscores[alignment_name] = {}
-                    for thresh in self.hand_fscores_thresh:
-                        fscores[alignment_name][thresh] = []
-                        self.build_metric_logger(
-                            f'{dset_name}_fscore_{thresh}')
-
-            desc = f'Evaluating dataset: {dset_name}'
-            for idx, batch in enumerate(
-                    tqdm.tqdm(dataloader, desc=desc, dynamic_ncols=True)):
-                _, hand_imgs, hand_targets = batch
-
-                hand_imgs = hand_imgs.to(device=device)
-                hand_targets = [t.to(device=device) for t in hand_targets]
-
-                model_output = hand_model(hand_imgs=hand_imgs,
-                                          num_hand_imgs=len(hand_imgs))
-
-                hand_vertices = model_output.get('vertices')
-                hand_joints = model_output.get('joints')
-
-                out_params = {}
-                for key, val in model_output.items():
-                    if not torch.is_tensor(val):
-                        continue
-                    out_params[key] = val.detach().cpu().numpy()
-
-                if compute_mpjpe:
-                    hand_mpjpe_out = self.compute_mpjpe(
-                        hand_joints, hand_targets,
-                        gt_joint_idxs=self.right_hand_idxs,
-                        alignments=alignments)
-                    hand_valid += hand_mpjpe_out['valid'].sum()
-
-                    for alignment_name, val in hand_mpjpe_out['array'].items():
-                        if len(val) < 1:
-                            continue
-                        mpjpe_err[alignment_name].append(val)
-
-                if compute_v2v:
-                    v2v_output = self.compute_v2v(
-                        hand_vertices, hand_targets, alignments)
-                    for alignment_name, val in v2v_output['point'].items():
-                        v2v_err[alignment_name].append(val)
-
-                    for alignment_name, val in v2v_output['fscore'].items():
-                        for thresh, fscore_val in val.items():
-                            fscores[alignment_name][thresh].append(fscore_val)
-                if idx == 0:
-                    camera_parameters = model_output.get('camera_parameters')
-                    self.create_summaries(
-                        step, dset_name,
-                        hand_imgs.detach().cpu().numpy(),
-                        hand_targets,
-                        model_output,
-                        camera_parameters=camera_parameters,
-                        degrees=self.hand_degrees,
-                        renderer=self.hand_renderer,
-                        gt_renderer=self.gt_hand_renderer,
-                        prefix='Hand',
-                    )
-
-            # Compute hand Mean per Joint Point Error (MPJPE)
-            if compute_mpjpe:
-                for key, val in mpjpe_err.items():
-                    val = np.concatenate(val)
-                    metric_value = val.sum() / hand_valid * 1000
-                    alignment_name = key.title()
-
-                    # Store the Procrustes aligned MPJPE
-                    self.loggers[f'{dset_name}_mpjpe'].info(
-                        '[{:06d}] {}: {}  3D Hand Keypoint error: {:.4f} mm',
-                        step,
-                        dset_name,
-                        alignment_name,
-                        metric_value)
-
-                    metric_name = f'{dset_name}/{alignment_name}/Hand'
-                    self.filewriter.add_scalar(metric_name, metric_value, step)
-
-            if compute_v2v:
-                for key, val in v2v_err.items():
-                    val = np.concatenate(val, axis=0)
-                    # Divide by the number of items in the dataset and the
-                    # number of vertices
-                    metric_value = val.mean() * 1000
-                    alignment_name = key.title()
-
-                    self.loggers[f'{dset_name}_v2v'].info(
-                        '[{:06d}] {}: Vertex-To-Vertex/{}: {:.4f} mm',
-                        step, dset_name, alignment_name, metric_value)
-
-                    metric_name = f'{dset_name}/{alignment_name}/Hand_V2V'
-                    #  summary_dict[metric_name] = val
-                    self.filewriter.add_scalar(metric_name, metric_value, step)
-
-                for alignment_name, val in fscores.items():
-                    for thresh, fscore_arr in val.items():
-                        metric_value = np.concatenate(
-                            fscore_arr, axis=0).mean()
-                        summary_name = (f'{dset_name}/F@{thresh * 1000:.1f}/'
-                                        f'{alignment_name}')
-                        self.filewriter.add_scalar(
-                            summary_name, metric_value, step)
-        return
-
     def run_body_eval(self, dataloaders, model, step, alignments=None,
                       device=None):
+        '''run body evaluation
+            input: 
+                dataloaders: the predicted vertices from out model
+                model: the motion capture model that we trained
+                step: the training step of the current model (just to show info in evaluation results)
+                alignments: the alignment methods used to compute the mpjpe metric
+                device: gpu or cpu
+        '''  
         if alignments is None:
             alignments = {'procrustes': ProcrustesAlignmentMPJPE(),
                           #  'root': RootAlignmentMPJPE(),
@@ -712,7 +504,8 @@ class Evaluator(object):
                 body_mpjpe_err = {
                     alignment_name: [] for alignment_name in alignments}
                 self.build_metric_logger(f'{dset_name}_body_mpjpe')
-
+            
+            # not computed in expose's experiments
             compute_hand_mpjpe = 'hand_mpjpe' in dset_metrics
             if compute_hand_mpjpe:
                 left_hand_valid = 0
@@ -731,13 +524,15 @@ class Evaluator(object):
                 head_mpjpe_err = {
                     alignment_name: [] for alignment_name in alignments}
                 self.build_metric_logger(f'{dset_name}_head_mpjpe')
-
+            
+            # only be computed when evaluating 3DPW
             compute_mpjpe14 = 'mpjpe14' in dset_metrics
             if compute_mpjpe14:
                 mpjpe14_err = {
                     alignment_name: [] for alignment_name in alignments}
                 self.build_metric_logger(f'{dset_name}_mpjpe14')
-
+            
+            # be computed when evaluating EHF
             compute_v2v = 'v2v' in dset_metrics
             if compute_v2v:
                 v2v_err = {key: [] for key in alignments}
@@ -759,7 +554,7 @@ class Evaluator(object):
                 full_imgs_list, body_imgs, body_targets = batch
                 full_imgs = to_image_list(full_imgs_list)
 
-                hand_imgs, hand_targets = None, None
+                hand_imgs, hand_targets = None, None # if None, the hand/head imgs will be cropped according to the model's predicted keypoints
                 head_imgs, head_targets = None, None
 
                 if full_imgs is not None:
@@ -776,6 +571,7 @@ class Evaluator(object):
 
                 body_vertices = None
                 body_output = model_output.get('body')
+                # get the output of the model's final stage
                 body_stage_n_out = body_output.get('final', {})
                 if body_stage_n_out is not None:
                     body_vertices = body_stage_n_out.get('vertices', None)
@@ -789,12 +585,10 @@ class Evaluator(object):
                         body_joints = body_stage_n_out.get('joints', None)
 
                 out_params = {}
-                #logger.info('all keys: {}',body_stage_n_out.keys())
                 for key, val in body_stage_n_out.items():
                     if not torch.is_tensor(val):
                         #logger.info('not tensor output: k: {}, v shape: {}',key,val.shape)
                         continue
-                    #logger.info('tensor output: k: {}, v shape: {}',key,val.shape)
                     out_params[key] = val.detach().cpu().numpy()
 
                 if compute_body_mpjpe:
@@ -807,9 +601,7 @@ class Evaluator(object):
 
                     computed_errors = body_mpjpe_out['array']
                     for alignment_name, val in computed_errors.items():
-                        # logger.info(
-                        #     f'{alignment_name}: '
-                        #     f'{val.shape}')
+                        # pelvis alignment is not suitable for the mpjpe computation
                         if alignment_name == 'pelvis':
                             continue
                         body_mpjpe_err[alignment_name].append(
@@ -856,6 +648,7 @@ class Evaluator(object):
                             continue
                         right_hand_mpjpe_err[alignment_name].append(val)
 
+                # compute v2v error metrics for experiments
                 if compute_v2v:
                     v2v_output = self.compute_v2v(
                         body_vertices, body_targets, alignments)
@@ -863,7 +656,7 @@ class Evaluator(object):
                         if alignment_name == 'pelvis':
                             continue
                         v2v_err[alignment_name].append(val)
-
+                    # compute body specific v2v error
                     if self.body_vertex_ids is not None:
                         body_v2v_output = self.compute_v2v(
                             body_vertices, body_targets,
@@ -873,6 +666,7 @@ class Evaluator(object):
                             if alignment_name == 'pelvis':
                                 continue
                             body_v2v_err[alignment_name].append(val)
+                    # compute hands specific v2v error
                     if self.left_hand_vertex_ids is not None:
                         left_hand_v2v_output = self.compute_v2v(
                             body_vertices, body_targets,
@@ -893,6 +687,7 @@ class Evaluator(object):
                             if alignment_name == 'pelvis':
                                 continue
                             right_hand_v2v_err[alignment_name].append(val)
+                    # compute face specific v2v error
                     if self.face_vertex_ids is not None:
                         face_v2v_output = self.compute_v2v(
                             body_vertices, body_targets,
@@ -902,7 +697,8 @@ class Evaluator(object):
                             if alignment_name == 'pelvis':
                                 continue
                             face_v2v_err[alignment_name].append(val)
-
+                
+                # compute the mpjpe14 metric (only used in evaluation on 3DPW)
                 if compute_mpjpe14 and body_vertices is not None:
                     
                     # gt_joints14 = [target.get_field('joints14').
@@ -912,12 +708,12 @@ class Evaluator(object):
                     # if len(gt_joints14) > 0:
                     #     gt_joints14 = np.asarray(gt_joints14)
 
-                    # P add
+                    # get the gt_joints14 by regress gt_vertices to the 14 joints
                     gt_vertices = [target.get_field('vertices').
                                 vertices.detach().cpu().numpy()
                                 for target in body_targets
                                 if target.has_field('vertices')]
-                    gt_vertices = np.array(gt_vertices)
+                    gt_vertices = np.array(gt_vertices) # (32, 10475, 3)
                     if len(gt_vertices) > 0:
                     
                         if torch.is_tensor(body_vertices):
@@ -927,25 +723,22 @@ class Evaluator(object):
                         pred_joints = np.einsum(
                             'jv,bvm->bjm', self.J14_regressor, body_vertices)
                         
-                        #logger.info('gt_vertices shape: {}',gt_vertices.shape)
-                        #ehf: (32, 10475, 3)
-
-                        #gt_joints14 = np.einsum(
-                            #'jv,bvm->bjm', self.J14_regressor, gt_vertices)
+                        # when evaluating EHF, quit this commentting
+                        # gt_joints14 = np.einsum(
+                            # 'jv,bvm->bjm', self.J14_regressor, gt_vertices) 
+                        # when evaluating 3DPW, quit this commentting
                         gt_joints14 = np.einsum(
-                            'jv,bvm->bjm', self.J14_regressor_SMPL, gt_vertices)[:,H36M_TO_J14,:]
+                            'jv,bvm->bjm', self.J14_regressor_SMPL, gt_vertices)[:,H36M_TO_J14,:] # get 14 joints from 17 H36m joints
                         #error = np.sqrt(((pred_joints - gt_joints14) ** 2).sum(axis=-1)).mean(axis=-1)
                         #logger.info('mpjpe from spin: {}',error)
-                        #logger.info('gt_joints14[0]: {}',gt_joints14[0])#17*3
-                        #logger.info('pred_joints[0]: {}',pred_joints[0])#14*3
-                        #p add
+
                         for alignment_name, alignment in alignments.items():
                             for bidx in range(gt_joints14.shape[0]):
                                 mpjpe14_err[alignment_name].append(
                                     alignment(
                                         pred_joints[bidx],
                                         gt_joints14[bidx])['point'])
-                '''
+                ''' # save visualizations to summary
                 if idx == 0:
                     camera_parameters = body_output.get('camera_parameters')
                     self.create_summaries(
@@ -1061,7 +854,7 @@ class Evaluator(object):
                     if len(val) < 1:
                         continue
                     val = np.concatenate(val, axis=0)
-                    metric_value = np.mean(val) * 1000
+                    metric_value = np.mean(val) * 1000 # convert to millemeter
                     alignment_name = key.title()
 
                     self.loggers[f'{dset_name}_v2v'].info(
@@ -1141,15 +934,19 @@ class Evaluator(object):
         return
 
     @torch.no_grad()
-    def run(self, model, dataloaders, exp_cfg, device, step=0):
-        if self.rank > 0:
-            return
+    def run(self, model, dataloaders, device, step=0):
+        '''run evaluation
+            input: 
+                dataloaders: the evaluating dataloader
+                model: the motion capture model that we trained
+                step: the training step of the current model (just to show info in evaluation results)
+                device: gpu or cpu
+        '''  
         model.eval()
         assert not (model.training), 'Model is in training mode!'
 
+        # whole body dataloader (hand/head specific datasets' evaluation code was deleted, because they don't support evaluation on testsets by ourselves, submitting to websites/emails required)
         body_dloader = dataloaders.get('body', None)
-        hand_dloader = dataloaders.get('hand', None)
-        head_dloader = dataloaders.get('head', None)
 
         if self.distributed:
             eval_model = deepcopy(model.module)
@@ -1162,12 +959,4 @@ class Evaluator(object):
             self.run_body_eval(body_dloader, eval_model,
                                alignments=self.body_alignments,
                                step=step, device=device)
-        if hand_dloader is not None:
-            self.run_hand_eval(hand_dloader, eval_model,
-                               alignments=self.hand_alignments,
-                               step=step,
-                               device=device)
-        if head_dloader is not None:
-            self.run_head_eval(head_dloader, eval_model,
-                               alignments=self.head_alignments,
-                               step=step, device=device)
+        

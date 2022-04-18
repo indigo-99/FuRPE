@@ -145,7 +145,7 @@ def main(
 
     # add evaluation (expose/evaluation.py):
     with Evaluator(exp_cfg) as evaluator:
-        evaluator.run(model, dataloaders, exp_cfg, device)
+        evaluator.run(model, dataloaders, device)
 
     '''
     # show/save of predicted results, not needed during evaluation on test datasets

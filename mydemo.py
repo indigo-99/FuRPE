@@ -278,19 +278,22 @@ def main(
     if not torch.cuda.is_available():
         logger.error('CUDA is not available!')
         sys.exit(3)
-    '''
+    
     logger.remove()
     logger.add(lambda x: tqdm.write(x, end=''),
                level=exp_cfg.logger_level.upper(),
                colorize=True)
-
+    
+    # Use rcnn to detect body/hand/face bbox, and package bboxes into dataloader for inputing into the model
     expose_dloader = preprocess_images(
-        image_folder, exp_cfg, batch_size=rcnn_batch, device=device,num_workers=4)
+        image_folder, exp_cfg, batch_size = rcnn_batch, device = device,num_workers=4)
 
+    # path to save predicted results 
     demo_output_folder = osp.expanduser(osp.expandvars(demo_output_folder))
     logger.info(f'Saving results to: {demo_output_folder}')
     os.makedirs(demo_output_folder, exist_ok=True)
 
+    # initialize the motion-capture model
     model = SMPLXNet(exp_cfg)
     try:
         model = model.to(device=device)
@@ -298,16 +301,17 @@ def main(
         # Re-submit in case of a device error
         sys.exit(3)
 
+    # load checkpoints to the model
     output_folder = exp_cfg.output_folder
     checkpoint_folder = osp.join(output_folder, exp_cfg.checkpoint_folder)
     checkpointer = Checkpointer(
         model, save_dir=checkpoint_folder, pretrained=exp_cfg.pretrained)
 
-    arguments = {'iteration': 0, 'epoch_number': 0}
+    # arguments = {'iteration': 0, 'epoch_number': 0}
     extra_checkpoint_data = checkpointer.load_checkpoint()
-    for key in arguments:
-        if key in extra_checkpoint_data:
-            arguments[key] = extra_checkpoint_data[key]
+    # for key in arguments:
+    #     if key in extra_checkpoint_data:
+    #         arguments[key] = extra_checkpoint_data[key]
 
     model = model.eval()
 
@@ -347,7 +351,6 @@ def main(
         body_output = model_output.get('body')
 
         _, _, H, W = full_imgs.shape
-        #  logger.info(f'{H}, {W}')
         #  H, W, _ = hd_imgs.shape
         if render:
             hd_imgs = np.transpose(undo_img_normalization(hd_imgs, means, std),
@@ -369,17 +372,8 @@ def main(
         body_output = model_output.get('body', {})
         num_stages = body_output.get('num_stages', 3)
         stage_n_out = body_output.get(f'stage_{num_stages - 1:02d}', {})
-        # model_vertices = stage_n_out.get('vertices', None)
-
-        # if stage_n_out is not None:
-        #     model_vertices = stage_n_out.get('vertices', None)
 
         faces = stage_n_out['faces']
-        # if model_vertices is not None:
-        #     model_vertices = model_vertices.detach().cpu().numpy()
-        #     camera_parameters = body_output.get('camera_parameters', {})
-        #     camera_scale = camera_parameters['scale'].detach()
-        #     camera_transl = camera_parameters['translation'].detach()
 
         out_img = OrderedDict()
 
@@ -404,20 +398,7 @@ def main(
             focal_length=focal_length,
         )
         
-        # if render:
-        #     # Render the initial predictions on the original image resolution
-        #     hd_orig_overlays = hd_renderer(
-        #         model_vertices, faces,
-        #         focal_length=hd_params['focal_length_in_px'],
-        #         camera_translation=hd_params['transl'],
-        #         camera_center=hd_params['center'],
-        #         bg_imgs=bg_hd_imgs,
-        #         return_with_alpha=True,
-        #     )
-        #     out_img['hd_orig_overlay'] = hd_orig_overlays
-
         # Render the overlays of the final prediction
-        
         if render:
             hd_overlays = hd_renderer(
                 final_model_vertices,
@@ -437,7 +418,6 @@ def main(
                         out_img[key], [0, 2, 3, 1]) * 255, 0, 255).astype(
                             np.uint8)
         
-            os.makedirs(demo_output_folder, exist_ok=True)
             
             for idx in tqdm(range(len(body_targets)), 'Saving ...'):
                 fname = body_targets[idx].get_field('fname')
@@ -447,7 +427,7 @@ def main(
                 curr_img = out_img['hd_overlay']
                 if comparing:
                     #logger.info('hd_img[idx] shape: {}',hd_imgs[idx].shape)#(1440,2560,4)
-                    color255_img=hd_imgs[idx]*255
+                    color255_img = hd_imgs[idx] * 255
                     cur_concat = np.concatenate((color255_img.astype(np.uint8), curr_img[idx]), axis=1)
                     pil_img.fromarray(cur_concat).save(
                         osp.join(demo_output_folder, f'{fname:06d}.png'))
@@ -456,11 +436,11 @@ def main(
                         osp.join(demo_output_folder, f'{fname:06d}.png'))
 
     logger.info(f'Average inference time: {total_time / cnt}')
-    '''
+    
     logger.info(f'Generating demo videos.')
-    out_dir='/data/panyuqing/expose_experts/testvideo_res'
-    video_name=image_folder.split('/')[-1]#'stand'#'sit'
-    gen_video_out(in_dir=demo_output_folder, out_dir=out_dir, video_name=video_name)
+    out_dir = '/data/panyuqing/expose_experts/testvideo_res'
+    video_name = image_folder.split('/')[-1]#'stand'#'sit'
+    gen_video_out(in_dir = demo_output_folder, out_dir = out_dir, video_name = video_name)
 
 
 if __name__ == '__main__':

@@ -1188,10 +1188,10 @@ plot_conf_thresh: 0.3
 pretrained: ''
 results_folder: results
 save_mesh_summary: false
-save_part_v2v: false
-smplx_valid_verts_fn: data/smplx_valid_verts.npz
+
 summary_folder: summaries
 summary_steps: 500
 use_adv_training: false
 use_cuda: true
 use_hands_for_shape: false
+body_vertex_ids_path: data/body_vertex_ids.npy
