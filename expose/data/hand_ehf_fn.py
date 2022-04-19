@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+'''
+get filenames in the EHF testsets whose pseudo parameters contain hand poses.
+store the filenames as an .npy
+(Try to test the errors from pseudo parameters to ground truth parameters of EHF)
+'''
 import os.path as osp
 import os
-import time
 
-import torch
 import numpy as np
 from loguru import logger
 from tqdm import tqdm

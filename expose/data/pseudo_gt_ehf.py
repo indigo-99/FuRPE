@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+'''
+Except adding the process of the EHF testset, the remains are the same as pseudo_gt.py
+get distiled information from 3 part experts, save the generated pseudo_ground_truth parameters as training data's label.
+'''
 import os.path as osp
 import os
-import time
 
 import torch
-import torch.utils.data as dutils
 import numpy as np
 import torch.nn.functional as F
 from smplx import build_layer as build_body_model
@@ -47,7 +49,12 @@ def batch_rodrigues(rot_vecs, epsilon=1e-8):
     return rot_mat
 
 def batch_rot2aa(Rs, epsilon=1e-7):
-    #Rs is B x 3 x 3
+    ''' Calculates the axis-angle rotation vectors for a batch of rotation matrices
+        Parameters:
+            Rs: torch.tensor Nx3x3, array of rotation matrices
+        Returns:
+            torch.tensor Nx3, the transformed axis-angle parameters
+    '''
     cos = 0.5 * (torch.einsum('bii->b', [Rs]) - 1)
     cos = torch.clamp(cos, -1 + epsilon, 1 - epsilon)
 
@@ -65,9 +72,9 @@ def batch_rot2aa(Rs, epsilon=1e-7):
     return theta.unsqueeze(1) * torch.stack([axis0, axis1, axis2], 1)
 
 if __name__ == '__main__':
-    #device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     device = torch.device('cpu')
-    # build smplify-x model to get pseudo gt vertices
+    # build smplx model to get pseudo gt vertices from pose parameters (refer to expose/models/attention/predictor.py)
+    # configs
     _C = CN()
 
     _C.body_model = CN()
@@ -134,9 +141,6 @@ if __name__ == '__main__':
         logger.info('Distil_from_body_face_hands finishes!')
         os.chdir('/data/panyuqing/expose_experts')
         new_comp_img_fns=[comp_img_fns[i] for i in range(len(comp_img_fns)) if i not in del_indexes]
-        #comp_img_fns.clear()
-        #del comp_img_fns
-        #del img_fns
         logger.info('num of del_indexes: {}',len(del_indexes))
         logger.info('num of add training data: {}',len(new_comp_img_fns))
         np.save(save_comp_path, np.array(new_comp_img_fns))

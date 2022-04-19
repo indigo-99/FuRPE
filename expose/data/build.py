@@ -14,6 +14,10 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
+'''
+build dataloaders for training/testing
+'''
+
 from typing import NewType, List, Tuple, Union
 import sys
 import os.path as osp
@@ -50,7 +54,7 @@ def make_data_sampler(dataset, is_train=True,
         sampler = dutils.SequentialSampler(dataset)
     return sampler
 
-
+# for training/testing the specific head sub-network
 def make_head_dataset(name, dataset_cfg, transforms,
                       num_betas=10, num_expression_coeffs=10,
                       **kwargs):
@@ -84,7 +88,7 @@ def make_head_dataset(name, dataset_cfg, transforms,
     logger.info(f'Created head dataset: {dset_obj.name()}')
     return dset_obj
 
-
+# for training/testing the specific hand sub-network
 def make_hand_dataset(name, dataset_cfg, transforms,
                       num_betas=10, num_expression_coeffs=10,
                       **kwargs):
@@ -115,30 +119,32 @@ def make_hand_dataset(name, dataset_cfg, transforms,
     logger.info(f'Created dataset: {dset_obj.name()}')
     return dset_obj
 
-
+# for training/testing the whole-body network (USED)
 def make_body_dataset(name, dataset_cfg, transforms,
                       num_betas=10,
                       num_expression_coeffs=10,
                       **kwargs):
-    if name == 'ehf':
+    if name == 'ehf': #test
         obj = datasets.EHF
-    elif name == 'curated_fits':
+    elif name == 'curated_fits': #train
         obj = datasets.CuratedFittings
-    elif name == 'threedpw':
+    elif name == 'threedpw': #test
         obj = datasets.ThreeDPW
-    elif name == 'spin':
-        obj = datasets.SPIN
-    elif name == 'spinx':
-        obj = datasets.SPINX
-    elif name == 'lsp_test':
-        obj = datasets.LSPTest
-    elif name == 'openpose':
-        obj = datasets.OpenPose
-    elif name == 'tracks':
-        obj = datasets.OpenPoseTracks
+    # the belows are not been used
+    # elif name == 'spin':
+    #     obj = datasets.SPIN
+    # elif name == 'spinx':
+    #     obj = datasets.SPINX
+    # elif name == 'lsp_test':
+    #     obj = datasets.LSPTest
+    # elif name == 'openpose':
+    #     obj = datasets.OpenPose
+    # elif name == 'tracks':
+    #     obj = datasets.OpenPoseTracks
     else:
         raise ValueError(f'Unknown dataset: {name}')
-
+    
+    # datasets configs in conf.yaml
     args = dict(**dataset_cfg[name])
     args.update(kwargs)
 
@@ -152,8 +158,10 @@ def make_body_dataset(name, dataset_cfg, transforms,
     logger.info('Created dataset: {}', dset_obj.name())
     return dset_obj
 
-
 class MemoryPinning(object):
+    '''
+    pin_memory=True表示将load进的数据拷贝进锁页内存区，将内存中的Tensor转移至GPU cuda区会很快；pin_memory=False表示将load进数据放至非锁页内存区，速度会较慢。
+    '''
     def __init__(
         self,
         full_img_list: Union[ImageList, List[Tensor]],
@@ -179,7 +187,7 @@ class MemoryPinning(object):
             self.targets,
         )
 
-
+# process a batch of data (deal with inconformity of images' shape and targets' type)
 def collate_batch(batch, use_shared_memory=False, return_full_imgs=False,
                   pin_memory=True):
     if return_full_imgs:
@@ -234,6 +242,9 @@ def collate_batch(batch, use_shared_memory=False, return_full_imgs=False,
 
 
 def make_equal_sampler(datasets, batch_size=32, shuffle=True, ratio_2d=0.5):
+    '''
+    return a dataloader which equal samples on data with only 2d annotations ??? NOT UNDERSTAND
+    '''
     batch_sampler = EqualSampler(
         datasets, batch_size=batch_size, shuffle=shuffle, ratio_2d=ratio_2d)
     out_dsets_lst = [dutils.ConcatDataset(datasets) if len(datasets) > 1 else
@@ -245,6 +256,9 @@ def make_data_loader(dataset, batch_size=32, num_workers=0,
                      is_train=True, sampler=None, collate_fn=None,
                      shuffle=True, is_distributed=False,
                      batch_sampler=None):
+    '''
+    return a dataloader
+    '''
     if batch_sampler is None:
         sampler = make_data_sampler(
             dataset, is_train=is_train,
@@ -274,6 +288,9 @@ def make_data_loader(dataset, batch_size=32, num_workers=0,
 
 
 def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
+    '''
+    return one or more dataloaders of whole-body, hand only or head only datasets, defined in conf.yaml
+    '''
     is_train = 'train' in split
     num_betas = exp_cfg.body_model.num_betas
     num_expression_coeffs = exp_cfg.body_model.num_expression_coeffs
@@ -283,6 +300,7 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
     body_dsets_cfg = dataset_cfg.get('body', {})
     body_dset_names = body_dsets_cfg.get('splits', {})[split]
 
+    # get transform configs to augment datasets before inputting into the model
     body_transfs_cfg = body_dsets_cfg.get('transforms', {})
     body_transforms = build_transforms(body_transfs_cfg, is_train=is_train)
 
@@ -297,6 +315,8 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
     head_transforms = build_transforms(head_transfs_cfg, is_train=is_train)
     #if split=='test' and (len(hand_dset_names)>0 or len(head_dset_names)>0):
         #body_dset_names=[] #body_dset_names be [''] even set [] in conf.yaml, so manually define body no to test when testing hand/face
+    
+    # get body datasets
     body_datasets = []
     logger.info('body_dset_names length: {}',len(body_dset_names))
     for dataset_name in body_dset_names:
@@ -307,6 +327,7 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
                                  is_train=is_train, split=split, **kwargs)
         body_datasets.append(dset)
 
+    # hand_datasets are only used in testing hand sub-network
     hand_datasets = []
     for dataset_name in hand_dset_names:
         dset = make_hand_dataset(dataset_name, hand_dsets_cfg,
@@ -315,7 +336,8 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
                                  num_expression_coeffs=num_expression_coeffs,
                                  is_train=is_train, split=split, **kwargs)
         hand_datasets.append(dset)
-
+    
+    # head_datasets are only used in testing head sub-network
     head_datasets = []
     for dataset_name in head_dset_names:
         dset = make_head_dataset(dataset_name, head_dsets_cfg,
@@ -324,7 +346,8 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
                                  num_expression_coeffs=num_expression_coeffs,
                                  is_train=is_train, split=split, **kwargs)
         head_datasets.append(dset)
-
+    
+    # set False in config.yaml
     use_equal_sampling = exp_cfg.datasets.use_equal_sampling
 
     # Hard-coded for now
@@ -381,6 +404,7 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
                 head_datasets, batch_size=head_batch_size,
                 shuffle=shuffle, ratio_2d=head_ratio_2d)
 
+    # get body dataloaders
     body_data_loaders = []
     for body_dataset in body_datasets:
         body_data_loaders.append(
@@ -435,7 +459,7 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
         return dloaders
 
     return {
-        'body': body_data_loaders,
+        'body': body_data_loaders, # only this is used during training (not using hand/head specific images for whole-body training)
         'hand': hand_data_loaders,
         'head': head_data_loaders,
     }

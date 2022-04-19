@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
+'''
+Because the bad effect of the hand experts Minimal-Hand-torch and Blazehand, replace it with Frankmocap.
+only change the hand poses in pseudo_gt parameter files, avoiding reproducing all labels.
+read distiled information, change hand poses and regenerate vertices by the smplx model, then re-save results.
+BEING USED FINALLY.
+'''
 import os.path as osp
 import os
-import time
 
 import torch
-import torch.utils.data as dutils
 import numpy as np
 import torch.nn.functional as F
 from smplx import build_layer as build_body_model
 from fvcore.common.config import CfgNode as CN
 from loguru import logger
-import cv2
 from tqdm import tqdm
-
-import sys
-#sys.path.append('/data/panyuqing/experts')
-#sys.path.append('/data/panyuqing/expose_experts')
 
 def batch_rodrigues(rot_vecs, epsilon=1e-8):
     ''' Calculates the rotation matrices for a batch of rotation vectors

@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+'''
+Because the bad effect of the hand expert Minimal-Hand-torch, replace it with Blazehand (code from a PSYAI's employee)
+only change the hand poses in pseudo_gt parameter files, avoiding reproducing all labels.
+read distiled information, change hand poses and regenerate vertices by the smplx model, then re-save results.
+NOT BEING USED FINALLY.
+'''
 import os.path as osp
 import os
-import time
 
 import torch
-import torch.utils.data as dutils
 import numpy as np
 import torch.nn.functional as F
 from smplx import build_layer as build_body_model

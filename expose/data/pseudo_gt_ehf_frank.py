@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+'''
+Except change the hand expert from Minimal-Hand-torch to Frankmocap for the testset EHF, the remains are the same as pseudo_gt_ehf.py
+get distiled information from 3 part experts, save the generated pseudo_ground_truth parameters as training data's label.
+'''
 import os.path as osp
 import os
-import time
 
 import torch
-import torch.utils.data as dutils
 import numpy as np
 import torch.nn.functional as F
 from smplx import build_layer as build_body_model
