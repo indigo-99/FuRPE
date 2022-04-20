@@ -20,4 +20,7 @@ from .predictor import SMPLXHead
 
 
 def build_attention_head(cfg):
+    '''
+    build the motion capture model: create a SMPLXHead instance defined in predictor.py
+    '''
     return SMPLXHead(cfg)

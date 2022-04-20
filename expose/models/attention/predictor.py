@@ -14,12 +14,9 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-import sys
-
 from typing import List, Dict, Tuple, Callable, Optional, Union
 
 from yacs.config import CfgNode
-import time
 
 from collections import defaultdict
 
@@ -69,7 +66,9 @@ from expose.utils.typing_utils import Tensor
 
 
 class SMPLXHead(nn.Module):
-
+    '''
+    the class of the main pose estimation model 
+    '''
     def __init__(
         self,
         exp_cfg: CfgNode,
@@ -103,21 +102,22 @@ class SMPLXHead(nn.Module):
 
         self.detach_mean = attention_net_cfg.get('detach_mean', False)
 
+        # config about how to concat hand and body sub-networks' output
         condition_hand_on_body = attention_net_cfg.get(
             'condition_hand_on_body', {})
         self.condition_hand_on_body = any(condition_hand_on_body.values())
         logger.info(f'Condition hand on body: {self.condition_hand_on_body}')
         self.condition_hand_wrist_pose = condition_hand_on_body.get(
-            'wrist_pose', True)
+            'wrist_pose', True) # True
         logger.info(
             'Condition hand wrist pose on body: '
             f'{self.condition_hand_wrist_pose}')
         self.condition_hand_finger_pose = condition_hand_on_body.get(
-            'finger_pose', True)
+            'finger_pose', True) # True
         logger.info(
             'Condition hand finger pose on body: '
             f'{self.condition_hand_finger_pose}')
-        self.condition_hand_shape = condition_hand_on_body.get('shape', True)
+        self.condition_hand_shape = condition_hand_on_body.get('shape', True) # False
         logger.info(
             f'Condition hand shape on body shape: {self.condition_hand_shape}')
 
@@ -153,7 +153,8 @@ class SMPLXHead(nn.Module):
         logger.debug('Randomize global pose: {} from U({}, {})',
                      self.hand_randomize_global_orient,
                      self.hand_global_rot_min, self.hand_global_rot_max)
-
+        
+        # config about how to concat head and body sub-networks' output
         condition_head_on_body = attention_net_cfg.get(
             'condition_head_on_body', {})
         self.condition_head_on_body = any(condition_head_on_body.values())
@@ -220,7 +221,8 @@ class SMPLXHead(nn.Module):
         body_model_cfg = exp_cfg.get('body_model', {})
         body_use_face_contour = body_model_cfg.get('use_face_contour', True)
         logger.info('use_face_contour: {}',body_model_cfg.get('use_face_contour'))
-
+        
+        # not being used ??  set false in config.yaml  没懂有什么用
         self.refine_shape_from_hands = attention_net_cfg.get(
             'refine_shape_from_hands', False)
         logger.debug(
@@ -228,7 +230,6 @@ class SMPLXHead(nn.Module):
         self.refine_shape_from_head = attention_net_cfg.get(
             'refine_shape_from_head', False)
         logger.debug(f'Refine shape from head: {self.refine_shape_from_head}')
-
         self.hand_bbox_thresh = attention_net_cfg.get('hand_bbox_thresh', 0.4)
         logger.debug(
             f'Hand bounding box IoU threshold: {self.hand_bbox_thresh}')
@@ -236,13 +237,17 @@ class SMPLXHead(nn.Module):
         logger.debug(
             f'Head bounding box IoU threshold: {self.head_bbox_thresh}')
 
+        # how many stages of regressors, set 3 in config
         self.num_stages = smplx_net_cfg.get('num_stages', 3)
-        self.append_params = smplx_net_cfg.get('append_params', True)
 
+        # set True in config, the mlp will predict more dimensions of append_params
+        self.append_params = smplx_net_cfg.get('append_params', True)
+        
+        # if True, only pick the pose output of the last stage (each stage is a network block)
         self.pose_last_stage = smplx_net_cfg.get('pose_last_stage', False)
 
         self.body_model_cfg = body_model_cfg.copy()
-
+        # build a smplx model
         model_path = osp.expandvars(body_model_cfg.pop('model_folder', ''))
         model_type = body_model_cfg.pop('type', 'smplx')
         self.body_model = build_body_model(
@@ -275,15 +280,13 @@ class SMPLXHead(nn.Module):
         pose_desc_dict = build_all_pose_params(
             body_model_cfg, 0, self.body_model,
             append_params=self.append_params, dtype=dtype)
-
+        
+        # get parameterization of each param
         self.global_orient_decoder = pose_desc_dict['global_orient'].decoder
         global_orient_mean = pose_desc_dict['global_orient'].mean
-        #ContinuousRotReprDecoder(
-            # Num angles: 1
-            # Mean: torch.Size([6])
-            # )
         global_orient_type = body_model_cfg.get('global_orient', {}).get(
             'param_type', 'cont_rot_repr')
+        
         # Rotate the model 180 degrees around the x-axis
         if global_orient_type == 'aa':
             global_orient_mean[0] = math.pi
@@ -291,6 +294,8 @@ class SMPLXHead(nn.Module):
             global_orient_mean[3] = -1
         global_orient_dim = pose_desc_dict['global_orient'].dim
 
+        # all decoders are ContinuousRotReprDecoder (set in config.yaml)
+        # Decoder for transforming a latent representation to rotation matrices
         self.body_pose_decoder = pose_desc_dict['body_pose'].decoder
         body_pose_mean = pose_desc_dict['body_pose'].mean
         body_pose_dim = pose_desc_dict['body_pose'].dim
@@ -310,11 +315,13 @@ class SMPLXHead(nn.Module):
         jaw_pose_mean = pose_desc_dict['jaw_pose'].mean
         jaw_pose_dim = pose_desc_dict['jaw_pose'].dim
 
+        # get the mean parameter list 
+        # and the idxes of each parameter in all parameters
+        # for locating predicted parameters from model's output tensor
         mean_lst = []
-
         start = 0
-        global_orient_idxs = list(range(start, start + global_orient_dim))
 
+        global_orient_idxs = list(range(start, start + global_orient_dim))
         global_orient_idxs = torch.tensor(global_orient_idxs, dtype=torch.long)
         self.register_buffer('global_orient_idxs', global_orient_idxs)
         start += global_orient_dim
@@ -362,23 +369,25 @@ class SMPLXHead(nn.Module):
         start += num_expression_coeffs
         mean_lst.append(expression_mean.view(-1))
 
+        # build camera parameters according to config.yaml
         camera_cfg = smplx_net_cfg.get('camera', {})
         camera_data = build_cam_proj(camera_cfg, dtype=dtype)
         self.projection = camera_data['camera']
-
         camera_param_dim = camera_data['dim']
         camera_mean = camera_data['mean']
         #  self.camera_mean = camera_mean
         self.register_buffer('camera_mean', camera_mean)
         self.camera_scale_func = camera_data['scale_func']
 
+        # get the idxes of camera parameter in all parameters
         camera_idxs = list(range(
             start, start + camera_param_dim))
         self.register_buffer(
             'camera_idxs', torch.tensor(camera_idxs, dtype=torch.long))
         start += camera_param_dim
         mean_lst.append(camera_mean)
-
+        
+        # get the dimension of parameters needed to be output by out model
         param_mean = torch.cat(mean_lst).view(1, -1)
         param_dim = param_mean.numel() # numel: return the num of elements in an array
 
@@ -386,39 +395,25 @@ class SMPLXHead(nn.Module):
         backbone_cfg = smplx_net_cfg.get('backbone', {})
         self.backbone, feat_dims = build_backbone(backbone_cfg)
 
-        #p add to convert 2048 feat to 1024 to compute loss, then convert back to 2048 to self.regressor
-        # self.reduce_layer = nn.Linear(2048, 1024)
-        # init_weights(self.reduce_layer, gain=0.01,
-        #              init_type='xavier',
-        #              distr='uniform')
-        # self.reduce_layer = nn.Linear(2048, 1024)
-        # init_weights(self.reduce_layer, gain=0.01,
-        #              init_type='xavier',
-        #              distr='uniform')
-        # self.reduce_layer = nn.Linear(2048, 1024)
-        # init_weights(self.reduce_layer, gain=0.01,
-        #              init_type='xavier',
-        #              distr='uniform')
+        #self.append_params = smplx_net_cfg.get('append_params', True)
+        #self.num_stages = smplx_net_cfg.get('num_stages', 1)
 
-        self.append_params = smplx_net_cfg.get('append_params', True)
-        self.num_stages = smplx_net_cfg.get('num_stages', 1)
-
-        self.body_feature_key = smplx_net_cfg.get('feature_key', 'avg_pooling')# not pooling, but concat in config
+        # get the feature dimensions according to config.yaml
+        self.body_feature_key = smplx_net_cfg.get('feature_key', 'avg_pooling')# not avg_pooling, but concat in config.yaml
         feat_dim = feat_dims[self.body_feature_key]#concat dim is 2048 set in hrnet.py: get_output_dim
 
-        regressor_cfg = smplx_net_cfg.get('mlp', {}) # regressor input: feat+param, output: param needed(body, hand ,face)
+        # Construct the feature regressor
+        # input: feat+param, output: param needed(body, hand ,face)
+        regressor_cfg = smplx_net_cfg.get('mlp', {}) 
         regressor = MLP(feat_dim + self.append_params * param_dim,
                         param_dim, **regressor_cfg)
         self.regressor = IterativeRegression(
             regressor, param_mean, num_stages=self.num_stages)
 
+        # whether or not to update wrist pose according to the hand sub-network, not directly from the body network
         self.update_wrists = attention_net_cfg.get('update_wrists', True)
-        # Find the kinematic chain for the right wrist
-        right_wrist_idx = KEYPOINT_NAMES.index('right_wrist')
-        self.right_wrist_idx = right_wrist_idx
-        left_wrist_idx = KEYPOINT_NAMES.index('left_wrist')
-        self.left_wrist_idx = left_wrist_idx
 
+        # build the hand sub-network
         self.hand_predictor = HandPredictor(
             exp_cfg,
             pose_desc_dict['global_orient'],
@@ -442,6 +437,7 @@ class SMPLXHead(nn.Module):
             'scale_factor', 2.0)#1.5
         self.head_cropper = CropSampler(head_crop_size)
 
+        # build the head sub-network
         self.head_predictor = HeadPredictor(
             exp_cfg,
             pose_desc_dict['global_orient'],
@@ -449,6 +445,12 @@ class SMPLXHead(nn.Module):
             detach_mean=self.detach_mean,
             dtype=dtype)
         self.points_to_crops = ToCrops()
+
+        # Find the kinematic chain for the right wrist
+        right_wrist_idx = KEYPOINT_NAMES.index('right_wrist')
+        self.right_wrist_idx = right_wrist_idx
+        left_wrist_idx = KEYPOINT_NAMES.index('left_wrist')
+        self.left_wrist_idx = left_wrist_idx
 
         right_wrist_kin_chain = find_joint_kin_chain(
             right_wrist_idx,
@@ -477,6 +479,7 @@ class SMPLXHead(nn.Module):
         self.register_buffer('neck_kin_chain',
                              torch.tensor(neck_kin_chain, dtype=torch.long))
 
+        # get idxs of vertexes belonging to each part in the whole body vertices
         idxs_dict = get_part_idxs()
         body_idxs = idxs_dict['body']
         left_hand_idxs = idxs_dict['left_hand']
@@ -490,8 +493,10 @@ class SMPLXHead(nn.Module):
         self.register_buffer('right_hand_idxs', torch.tensor(right_hand_idxs))
         self.register_buffer('head_idxs', torch.tensor(head_idxs))
 
+        # build loss for keypoints
         self.keyp_loss = KeypointLoss(exp_cfg)
-
+        
+        # not being used
         self.mask_hand_keyps = attention_net_cfg.get('mask_hand_keyps', True)
         self.mask_head_keyps = attention_net_cfg.get('mask_head_keyps', True)
 
@@ -508,6 +513,7 @@ class SMPLXHead(nn.Module):
             logger.info(
                 '2D Head crop keyps loss: {}', self.head_crop_keyps_loss)
 
+        # keypoints loss for hand crops
         left_hand_crop_keypoint_loss_cfg = loss_cfg.get(
             'left_hand_crop_keypoints')
         self.left_hand_crop_keyps_weight = (
@@ -534,26 +540,32 @@ class SMPLXHead(nn.Module):
                 '2D Left hand crop keyps loss: {}',
                 self.right_hand_crop_keyps_loss)
         
+        # build pose losses for body
         self.body_loss = SMPLXLossModule(
             loss_cfg,
             use_face_contour=body_use_face_contour)
+        
+        # regularizer is not used during loss backwarding
         self.body_regularizer = RegularizerModule(
             loss_cfg, body_pose_mean=body_pose_mean,
             left_hand_pose_mean=left_hand_pose_mean,
             right_hand_pose_mean=right_hand_pose_mean,
             jaw_pose_mean=jaw_pose_mean
         )
+        
+        # build hand/head pose/regularizer losses, all not being returned by this class, so not used in training
         self.hand_loss = MANOLossModule(loss_cfg.get('hand', {}))
         self.hand_regularizer = MANORegularizer(loss_cfg.get('hand', {}))
         self.head_loss = FLAMELossModule(
             loss_cfg.get('head', {}), use_face_contour=body_use_face_contour)
         self.head_regularizer = FLAMERegularizer(loss_cfg.get('head', {}))
 
+        # freeze body network or not, set True in config.yaml (to finetune the public model.ckpt)
         self.freeze_body = attention_net_cfg.get('freeze_body', False)
         if self.freeze_body:
             for param in self.backbone.parameters():
                 param.requires_grad = False
-            # p add: testing not freeze regressor
+            ## add: not freezing the regressor during training can improve the effect of the model
             # for param in self.regressor.parameters():
             #     param.requires_grad = False
             # Stop updating batch norm statistics
@@ -563,10 +575,12 @@ class SMPLXHead(nn.Module):
             #     self.regressor)
 
         # Build part merging functions
+        # BUT merge configs are not defined in expose's config.yaml
+        # so the functions do the default simple merging
         hand_feat_dim = self.hand_predictor.get_feat_dim() #
         head_feat_dim = self.head_predictor.get_feat_dim()
         # Right hand pose
-        merging_cfg = attention_net_cfg.get('merging', {})
+        merging_cfg = attention_net_cfg.get('merging', {}) # empty dict
         self.right_hand_pose_merging_func = self._build_merge_func(
             merging_cfg,
             'right_hand_pose',
@@ -624,11 +638,12 @@ class SMPLXHead(nn.Module):
             part_param_dim=num_expression_coeffs,
         )
 
+        # not defined in config.yaml, not used
         hand_soft_weight_loss_cfg = loss_cfg.get('hand_soft_weight_loss', {})
         self.hand_soft_weight_loss = build_loss(**hand_soft_weight_loss_cfg)
         self.hand_soft_weight_loss_weight = hand_soft_weight_loss_cfg.get(
             'weight', 0.0)
-
+        # not defined in config.yaml, not used
         head_soft_weight_loss_cfg = loss_cfg.get('head_soft_weight_loss', {})
         self.head_soft_weight_loss = build_loss(**head_soft_weight_loss_cfg)
         self.head_soft_weight_loss_weight = head_soft_weight_loss_cfg.get(
@@ -640,6 +655,10 @@ class SMPLXHead(nn.Module):
             body_feat_dim: int, body_param_dim: int,
             part_feat_dim: int, part_param_dim: int,
     ) -> Callable:
+        '''
+        build merge function for body and part features if merge_type is not None
+        use part features during testing and use features merged by masks during training
+        '''
         merge_type = cfg.get(name, {}).get('type', 'simple')
         logger.debug(f'Building "{merge_type}" merging function for "{name}"')
         if merge_type == 'none':
@@ -675,6 +694,10 @@ class SMPLXHead(nn.Module):
         pass
 
     def flat_body_params_to_dict(self, param_tensor):
+        '''
+        flat the predicted body parameter tensors into dict with specific keys and values,
+        according to index defined in init()
+        '''
         global_orient = torch.index_select(
             param_tensor, 1, self.global_orient_idxs)
         body_pose = torch.index_select(
@@ -704,7 +727,8 @@ class SMPLXHead(nn.Module):
             root_pose: Tensor,
             body_pose: Tensor
     ) -> Tensor:
-        ''' Computes the absolute rotation of a joint from the kinematic chain
+        ''' 
+        Computes the absolute rotation of a joint from the kinematic chain
         '''
         # Create a single vector with all the poses
         parents_pose = torch.cat(
@@ -724,7 +748,10 @@ class SMPLXHead(nn.Module):
                         num_body_imgs: int = 0,
                         num_hand_imgs: int = 0
                         ) -> Tuple[Tensor, Tensor]:
-        ''' Builds the initial point for the iterative regressor of the hand
+        ''' 
+        Builds the mean pose for the hand regressor to regress the offset 
+        between the mean value computed by the body and hand networks
+        and the ground truth value
         '''
         device, dtype = global_orient.device, global_orient.dtype
         hand_only_mean, parent_rots = [], []
@@ -747,8 +774,9 @@ class SMPLXHead(nn.Module):
             parent_rots += [
                 right_wrist_parent_rot, left_to_right_wrist_parent_rot]
 
-            #  if self.condition_hand_on_body:
+            # if self.condition_hand_on_body: (True)
             # Convert the absolute pose to the latent representation
+            # if False, hand wrist poses come from mean poses 
             if self.condition_hand_wrist_pose:
                 right_wrist_pose = self.global_orient_decoder.encode(
                     right_wrist_pose_abs.unsqueeze(dim=1)).reshape(
@@ -781,7 +809,7 @@ class SMPLXHead(nn.Module):
 
             shape_condition = (
                 betas if self.condition_hand_shape else
-                self.hand_predictor.get_shape_mean(batch_size)
+                self.hand_predictor.get_shape_mean(batch_size) # False, so it equals the mean shape
             )
             right_finger_pose_condition = (
                 right_hand_pose if self.condition_hand_finger_pose else
@@ -808,6 +836,7 @@ class SMPLXHead(nn.Module):
             hand_only_mean += [right_hand_mean, left_hand_mean]
 
         if num_hand_imgs > 0:
+            # hand specific imgs not used in training
             mean_param = self.hand_predictor.get_param_mean(
                 batch_size=num_hand_imgs,
                 add_shape_noise=self.hand_add_shape_noise,
@@ -847,13 +876,16 @@ class SMPLXHead(nn.Module):
         num_body_imgs: int = 0,
         num_head_imgs: int = 0
     ) -> Tensor:
-        ''' Builds the initial point of the head regressor
+        ''' 
+        Builds the mean pose for the head regressor to regress the offset 
+        between the mean value computed by the body and head networks
+        and the ground truth value
         '''
         head_only_mean = []
         if num_body_imgs > 0:
             batch_size = num_body_imgs
 
-            # Compute the absolute pose of the right wrist
+            # Compute the absolute pose of the neck
             neck_pose_abs = self.find_joint_global_rotation(
                 self.neck_kin_chain, global_orient, body_pose)
             # Convert the absolute neck pose to offsets
@@ -865,25 +897,28 @@ class SMPLXHead(nn.Module):
                 batch_size=batch_size)
 
             neck_pose_condition = (
-                neck_pose if self.condition_head_neck_pose else
+                neck_pose if self.condition_head_neck_pose else  # neck pose: False
                 self.head_predictor.get_neck_pose_mean(batch_size))
             jaw_pose_condition = (
                 jaw_pose.reshape(batch_size, -1)
                 if self.condition_head_jaw_pose else
                 self.head_predictor.get_jaw_pose_mean(batch_size)
             )
-            head_num_betas = self.head_predictor.get_num_betas()
-            shape_padding_size = head_num_betas - self.num_betas
+            
+            head_num_betas = self.head_predictor.get_num_betas() 
+            # head model's num_betas is 100, while body and hand models are all 10, set in config.yaml
+            shape_padding_size = head_num_betas - self.num_betas # 100-10=90
             betas_condition = (
                 F.pad(betas.reshape(batch_size, -1), (0, shape_padding_size))
                 if self.condition_head_shape else
                 self.head_predictor.get_shape_mean(batch_size=batch_size)
-            )
+            ) # shape: False
 
+            # head model's num_betas is 50, while body and hand models are all 10, set in config.yaml
             head_num_expression_coeffs = (
                 self.head_predictor.get_num_expression_coeffs())
             expr_padding_size = (head_num_expression_coeffs -
-                                 self.num_expression_coeffs)
+                                 self.num_expression_coeffs)  # 50-10=40
             expression_condition = (
                 F.pad(
                     expression.reshape(batch_size, -1), (0, expr_padding_size))
@@ -891,7 +926,7 @@ class SMPLXHead(nn.Module):
                 self.head_predictor.get_expression_mean(batch_size=batch_size)
             )
 
-            # Should be Bx(Head pose params)
+            # shape should be Batch_size x (Head pose params)
             head_only_mean.append(torch.cat(
                 [neck_pose_condition, jaw_pose_condition,
                  betas_condition, expression_condition,
@@ -900,6 +935,7 @@ class SMPLXHead(nn.Module):
             ))
 
         if num_head_imgs > 0:
+            # no head specific imgs used in training the whole-body pose estimation model
             mean_param = self.head_predictor.get_param_mean(
                 batch_size=num_head_imgs,
                 add_shape_noise=self.head_add_shape_noise,
@@ -938,7 +974,9 @@ class SMPLXHead(nn.Module):
             key: str,
             est_center: Tensor, est_bbox_size: Tensor,
             thresh: float = 0.0) -> Tensor:
-        ''' Converts bounding boxes to a binary mask '''
+        ''' Converts the intersection of estimated and ground_truth bounding boxes to a binary mask 
+        NOT BEING USED
+        '''
         if thresh <= 0:
             return torch.ones([len(targets), 1], dtype=torch.bool,
                               device=est_center.device)
@@ -973,30 +1011,46 @@ class SMPLXHead(nn.Module):
                 head_targets: Optional[List] = None,
                 full_imgs: Optional[Union[ImageList, ImageListPacked]] = None,
                 ) -> Dict[str, Dict[str, Tensor]]:
-        ''' Forward pass of the attention predictor
+        ''' 
+        processing of the predictor
+        input:
+            images: training/testing data
+            targets: training/testing ground truth labels
+            hand_imgs training/testing hand specific data (not being used during training)
+            hand_targets: training/testing hand specific ground truth labels (not being used during training)
+            head_imgs training/testing head specific data (not being used during training)
+            head_targets: training/testing head specific ground truth labels (not being used during training)
+            full_imgs: raw data without cropping
+        output:
+            a dict of predicted parameters and losses, to be used in training/evaluation
         '''
         batch_size, _, crop_size, _ = images.shape
         device = images.device
         dtype = images.dtype
 
+        # feed data into the backbone and get the feature dict
         feat_dict = self.backbone(images)
         body_features = feat_dict[self.body_feature_key]
-
+        # get body parameters and deltas by feeding features into the regressor
         body_parameters, body_deltas = self.regressor(body_features)
 
+        # the losses dicts
         losses = {}
+
         # A list of dicts for the parameters predicted at each stage. The key
         # is the name of the parameters and the value is the prediction of the
         # model at the i-th stage of the iteration
         param_dicts = []
+
         # A dict of lists. Each key is the name of the parameter and the
-        # corresponding item is a list of offsets that are predicted by the
-        # model
+        # corresponding item is a list of offsets that are predicted by the model
         deltas_dict = defaultdict(lambda: [])
+        
+        # get specific params and deltas according to the regressor's output
         param_delta_iter = zip(body_parameters, body_deltas)
         for idx, (params, deltas) in enumerate(param_delta_iter):
             curr_params_dict = self.flat_body_params_to_dict(params)
-
+            # get the decoded value of each parameters
             out_dict = {}
             for key, val in curr_params_dict.items():
                 if hasattr(self, f'{key}_decoder'):
@@ -1004,7 +1058,6 @@ class SMPLXHead(nn.Module):
                     out_dict[key] = decoder(val)
                     out_dict[f'raw_{key}'] = val.clone()
                 else:
-                    #logger.info('no decoder? stage: {}  key: {}',idx,key)
                     out_dict[key] = val
 
             param_dicts.append(out_dict)
@@ -1017,7 +1070,7 @@ class SMPLXHead(nn.Module):
 
         if self.pose_last_stage:#True, means only pick the pose output of the last stage (each stage is a network block)
             merged_params = param_dicts[-1]
-        else:
+        else: # if False, save the concatenation of all output params from each regression stage 
             merged_params = {}
             for key in param_dicts[0].keys():
                 param = []
@@ -1027,12 +1080,11 @@ class SMPLXHead(nn.Module):
                     param.append(param_dicts[idx][key])
                 merged_params[key] = torch.cat(param, dim=0)
 
-        # Compute the body surface using the current estimation of the pose and
-        # the shape
+        # Compute the body vertices using the current estimation
         body_model_output = self.body_model(
             get_skin=True, return_shaped=True, **merged_params)
 
-        # Split the vertices, joints, etc. to stages
+        # Split the vertices, joints, etc. to stages and add to the output dictionary (for saving summary)
         out_params = defaultdict(lambda: dict())
         for key in body_model_output:
             if torch.is_tensor(body_model_output[key]):
@@ -1044,12 +1096,12 @@ class SMPLXHead(nn.Module):
                 if len(out_list) == self.num_stages:
                     for idx in range(len(out_list)):
                         out_params[f'stage_{idx:02d}'][key] = out_list[idx]
-                # Else add only the last
+                # Else only store the last in output params' dict
                 else:
                     out_key = f'stage_{self.num_stages - 1:02d}'
                     out_params[out_key][key] = out_list[-1]
 
-        # Add the predicted parameters to the output dictionary
+        # Add the predicted parameters to the output dictionary (for computing loss?)
         for stage in range(self.num_stages):
             stage_key = f'stage_{stage:02d}'
             if len(out_params[stage_key]) < 1:
@@ -1057,9 +1109,12 @@ class SMPLXHead(nn.Module):
             out_params[stage_key].update(param_dicts[stage])
             out_params[stage_key]['faces'] = self.body_model.faces
         
+        # Extract the final parameters predicted by the body only model, 
+        # to merge the output of 3 sub-networks belows
+        betas = param_dicts[-1].get('betas').clone()
+        expression = param_dicts[-1].get('expression')
         global_orient_from_body_net = param_dicts[-1]['global_orient'].clone()
         body_pose_from_body_net = param_dicts[-1]['body_pose'].clone()
-
         raw_body_pose_from_body_net = param_dicts[-1]['raw_body_pose'].clone(
         ).reshape(batch_size, 21, -1)
         raw_right_hand_pose_from_body_net = param_dicts[-1][
@@ -1068,7 +1123,7 @@ class SMPLXHead(nn.Module):
         right_hand_pose = param_dicts[-1]['right_hand_pose'].clone()
         jaw_pose = param_dicts[-1]['jaw_pose'].clone()
 
-        # Extract the camera parameters estimated by the body only image
+        # Extract the camera parameters estimated by the body only image, to compute the projected 2d joints
         camera_params = torch.index_select(
             body_parameters[-1], 1, self.camera_idxs)
         scale = camera_params[:, 0].view(-1, 1)
@@ -1077,26 +1132,20 @@ class SMPLXHead(nn.Module):
         # scale values are always positive
         scale = self.camera_scale_func(scale)
 
-        # Extract the final shape and expression parameters predicted by the
-        # body only model
-        betas = param_dicts[-1].get('betas').clone()
-        expression = param_dicts[-1].get('expression')
-
-        # Project the joints on the image plane
+        # Project the joints on the image plane (projected joints tensor value are very small, may be normalized according to images' shape)
         proj_joints = self.projection(
             out_params[f'stage_{self.num_stages - 1:02d}']['joints'],
             scale=scale, translation=translation)
-        # proj result, head joints is -5*e5??
 
         #logger.info('joints3d pred: {}',out_params[f'stage_{self.num_stages - 1:02d}']['joints'])
-        # Add the projected joints
+        # Add the projected joints to the output dictionary 
         out_params['proj_joints'] = proj_joints
         # the number of stages
         out_params['num_stages'] = self.num_stages
         # and the camera parameters to the output
         out_params['camera_parameters'] = CameraParams(
             translation=translation, scale=scale)
-        # P add: shang is not value ? not used in mytrain.py
+        # add the specific camera value to use in mytrain.py (the above params are enveloped in a class)
         out_params['camera_translation']=translation
         out_params['camera_scale']=scale
 
@@ -1150,12 +1199,13 @@ class SMPLXHead(nn.Module):
                 right_hand_points = right_hand_cropper_out['sampling_grid']
                 right_hand_crop_transform = right_hand_cropper_out['transform']
 
-                # Store the transformation parameters
+                # Store the crops to the output dict
                 out_params['left_hand_crops'] = left_hand_crops.detach()
                 out_params['left_hand_points'] = left_hand_points.detach()
                 out_params['right_hand_crops'] = right_hand_crops.detach()
                 out_params['right_hand_points'] = right_hand_points.detach()
 
+                # Store the transformation parameters to the output dict
                 out_params['right_hand_crop_transform'] = (
                     right_hand_crop_transform.detach())
                 out_params['left_hand_crop_transform'] = (
@@ -1170,7 +1220,8 @@ class SMPLXHead(nn.Module):
                     right_hand_cropper_out['hd_to_crop'])
                 out_params['right_hand_inv_crop_transforms'] = (
                     right_hand_points_to_crop['inv_crop_transforms'])
-
+            
+            # add hand crops to the all_hand_imgs list
             # Flip the left hand to a right hand
             all_hand_imgs = []
             hand_global_orient = []
@@ -1215,8 +1266,9 @@ class SMPLXHead(nn.Module):
                 flipped_left_hand_pose = flip_pose(
                     param_dicts[-1]['left_hand_pose'], pose_format='rot-mat')
 
-                # Build the mean used to condition the hand network using the
-                # parameters estimated by the body network
+                # Build the mean value for finetuning the hand sub-network 
+                # to output the offset between hand and body network,
+                # by the parameters estimated by the hand and body network
                 hand_mean, parent_rots = self.build_hand_mean(
                     param_dicts[-1]['global_orient'],
                     param_dicts[-1]['body_pose'],
@@ -1267,9 +1319,10 @@ class SMPLXHead(nn.Module):
                     part_feat=right_hand_features,
                     mask=right_hand_mask,
                 )
-                raw_right_hand_pose = raw_right_hand_pose_dict['merged']
+                raw_right_hand_pose = raw_right_hand_pose_dict['merged'] # part network's output
 
-                if self.update_wrists:
+                if self.update_wrists:  # update wrist pose according to hand sub-network's output
+                    # set True in config.yaml
                     right_wrist_pose_from_part = hand_network_output.get(
                         'raw_right_wrist_pose')
                     right_wrist_pose_from_body = raw_body_pose_from_body_net[
@@ -1283,7 +1336,7 @@ class SMPLXHead(nn.Module):
                             mask=right_hand_mask,
                         )
                     )
-                    raw_right_wrist_pose = raw_right_wrist_pose_dict['merged']
+                    raw_right_wrist_pose = raw_right_wrist_pose_dict['merged'] # part network's output
                     final_body_pose[:, self.right_wrist_idx - 1] = (
                         raw_right_wrist_pose)
 
@@ -1340,6 +1393,7 @@ class SMPLXHead(nn.Module):
 
         num_head_imgs = 0
         head_mask = None
+        # if predict head by sub-network, crop head from full_imgs according to projected joints
         if self.predict_head:
             if self.apply_head_network_on_body:
                 head_joints = (torch.index_select(
@@ -1369,6 +1423,7 @@ class SMPLXHead(nn.Module):
                 head_crop_transform = head_cropper_out['transform']
                 #logger.info('head_crop_transform: {}',head_crop_transform)
 
+                # add head crops and transforms to the output dict
                 out_params['head_crops'] = head_crops.detach()
                 out_params['head_points'] = head_points.detach()
                 out_params['head_crop_transform'] = (
@@ -1425,6 +1480,7 @@ class SMPLXHead(nn.Module):
                 )
                 all_head_imgs = torch.cat(all_head_imgs, dim=0)
 
+                # predict head pose by head sub-network, based on body network's output
                 head_predictions = self.head_predictor(
                     all_head_imgs,
                     head_mean=head_mean,
@@ -1457,7 +1513,7 @@ class SMPLXHead(nn.Module):
                         part_feat=head_features,
                         mask=head_mask,
                     )
-                    raw_jaw_pose = raw_jaw_pose_dict['merged']
+                    raw_jaw_pose = raw_jaw_pose_dict['merged'] # the merge result is jaw pose from part network's output
 
                     expression_from_body = param_dicts[-1].get('expression')
                     expression_from_head = head_network_output.get(
@@ -1475,11 +1531,13 @@ class SMPLXHead(nn.Module):
 
 
         if self.predict_head or self.predict_hands:
+            # update the body_pose rotation matrix (update wrist pose)
             body_pose = self.body_pose_decoder(
                 final_body_pose.reshape(batch_size, -1))
         else:
             body_pose = body_pose_from_body_net
 
+        # get the final parameters of body, hand, face networks
         final_body_parameters = {
             'global_orient': param_dicts[-1].get('global_orient'),
             'body_pose': body_pose,
@@ -1489,7 +1547,8 @@ class SMPLXHead(nn.Module):
             'betas': betas,
             'expression': expression
         }
-        #betas not in out_params, to be easier, all do the following code
+        
+        # add new parameters and vertices to param_dicts, and output dict(as the value of key: 'final')
         if self.apply_hand_network_on_body or self.apply_head_network_on_body:
             # Compute the mesh using the new hand and face parameters
             final_body_model_output = self.body_model(
@@ -1497,21 +1556,17 @@ class SMPLXHead(nn.Module):
             param_dicts.append({
                 **final_body_parameters, **final_body_model_output})
 
-        if (self.apply_hand_network_on_body or
-                self.apply_head_network_on_body):
             out_params['final'] = {
                 **final_body_parameters, **final_body_model_output}
             joints3d = final_body_model_output.get('joints')
+            # get the updated projected 2d joints
             proj_joints = self.projection(
                 joints3d, scale=scale, translation=translation)
             out_params['final_proj_joints'] = proj_joints
-            # Update the camera parameters with the new projected joints
             out_params['proj_joints'] = proj_joints
-            out_params['final']['proj_joints'] = proj_joints
-            
+            out_params['final']['proj_joints'] = proj_joints     
         else:
             joints3d = out_params[f'stage_{self.num_stages - 1:02d}']['joints']
-            #P add: maybe body only use 3d joints loss, so no proj_joints
             out_params['final'] = {
                 **final_body_parameters, **final_body_model_output}
             proj_joints = self.projection(
@@ -1519,6 +1574,7 @@ class SMPLXHead(nn.Module):
             out_params['proj_joints'] = proj_joints
             out_params['final']['proj_joints'] = proj_joints
             out_params['final_proj_joints'] = proj_joints
+        
         out_params['final']['faces'] = self.body_model.faces
 
         body_crop_size = images.shape[2]
@@ -1528,6 +1584,8 @@ class SMPLXHead(nn.Module):
             proj_joints * 0.5 + 0.5) * body_crop_size
 
         # Transform the projected points back to the HD image
+        # the below conditions are all true, but hd_proj_joints is computed by head_inv_crop_transforms or left_hand_inv_crop_transforms? 
+        # NOT UNDERSTAND
         if self.apply_head_network_on_body:
             hd_proj_joints = torch.einsum(
                 'bij,bkj->bki',
@@ -1544,7 +1602,6 @@ class SMPLXHead(nn.Module):
             out_params['hd_proj_joints'] = hd_proj_joints.detach()
         
         if self.apply_head_network_on_body:
-            # inverse_cuda: For batch 0: U(1,1) is zero, singular U.??? 
             inv_head_crop_transf = torch.inverse(head_crop_transform)
             head_img_keypoints = torch.einsum(
                 'bij,bkj->bki',
@@ -1617,17 +1674,16 @@ class SMPLXHead(nn.Module):
                 out_params['gt_left_hand_keypoints'] = (
                     gt_left_hand_keypoints.detach() * self.hand_crop_size)
             
-        # P add losses computation
-        # hd_proj_joints is proj_joints(-1,1) transform back to image size
-        #kploss=self.keyp_loss(proj_joints=out_params['hd_proj_joints'],joints3d=joints3d,targets=targets)
-        #logger.info('pred joints3d shape: {}',joints3d.shape)#(8,144,3）
+        # Add losses computation in the output dict, for training the model
         if self.training:
             kploss=self.keyp_loss(proj_joints=out_params['final']['proj_joints'],joints3d=joints3d,targets=targets)
-            
-            bdloss=self.body_loss(network_params=out_params,targets=targets) #uses out_params['final'], output will use the key too.
+            # kploss=self.keyp_loss(proj_joints=out_params['hd_proj_joints'],joints3d=joints3d,targets=targets)#joints3d.shape)#(8,144,3）
+            # hd_proj_joints is proj_joints(-1,1) transform back to image size 
+            # but change this brings no improvement in training effects 
+            bdloss=self.body_loss(network_params=out_params,targets=targets) 
             losses['keypoint_loss']=kploss
             losses['body_loss']=bdloss
-            
+            # add feature of 3 networks for feature distiling during training
             feats={'body_feat':body_features,'face_feat':head_features,'left_hand_feat':left_hand_features, 'right_hand_feat':right_hand_features}
             output = {
                 'body': out_params,

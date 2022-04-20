@@ -147,6 +147,14 @@ def build_all_pose_params(body_model_cfg,
                           body_model,
                           append_params=True,
                           dtype=torch.float32):
+    '''
+        input:
+            body_model_cfg: config of body model
+            feat_extract_depth: set 0? 不懂什么意思
+            body_model: the smplx model
+        output:
+            dict contains several parameters, each of which has decoder, regressor, etc.
+    '''
     mean_pose_path = osp.expandvars(body_model_cfg.mean_pose_path)
     mean_poses_dict = {}
     if osp.exists(mean_pose_path):

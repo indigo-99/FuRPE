@@ -29,8 +29,18 @@ def build_optimizer(
     exclude: str = '',
     train_loss_weight_list: List=[] 
 ) -> optim.Optimizer:
+    '''
+    build optimizer for training the model.
+    input:
+        model: under training
+        optim_cfg: set in config.yaml
+        exclude: parameters' name who are excluded from gradient descenting
+        train_loss_weight_list: add according to multi-task loss weight training idea, 
+                                i.e., the weight of loss to be trained, in need of optimization as well
+    output:
+        optimizer
+    '''
     params = []
-    hand_model_params = model.get_hand_model().named_parameters()
 
     for key, value in model.named_parameters():
         if not value.requires_grad:
@@ -40,8 +50,8 @@ def build_optimizer(
         if "bias" in key:
             lr = optim_cfg.lr * optim_cfg.bias_lr_factor
             weight_decay = optim_cfg.weight_decay_bias
+        
         #add for smaller lr of hand sub-network
-        #if key in hand_model_params:#'smplx.hand_predictor.'+hand_model_params=key
         if 'hand_predictor' in key:#if 'hand_predictor.backbone' in key:
             lr=lr*0.0001
 
@@ -66,7 +76,7 @@ def get_optimizer(params, optim_cfg):
     if optimizer_type == 'sgd':
         optimizer = optim.SGD(params, lr,
                               **optim_cfg.sgd)
-    elif optimizer_type == 'adam':
+    elif optimizer_type == 'adam': # this is used during training according to config.yaml
         optimizer = optim.Adam(params, lr, **optim_cfg.adam)
     elif optimizer_type == 'rmsprop':
         optimizer = optim.RMSprop(params, lr, **optim_cfg.rmsprop)
@@ -81,6 +91,14 @@ def build_scheduler(
         optimizer: optim.Optimizer,
         sched_cfg: Dict
 ) -> optim.lr_scheduler._LRScheduler:
+    '''
+    build a scheduler for the training optimizer.
+    input:
+        optimizer: training optimizer
+        sched_cfg: set in config.yaml
+    output:
+        scheduler
+    '''
     scheduler_type = sched_cfg.type
     if scheduler_type == 'none':
         return None
@@ -90,7 +108,7 @@ def build_scheduler(
         logger.info('Building scheduler: StepLR(step_size={}, gamma={})',
                     step_size, gamma)
         return scheduler.StepLR(optimizer, step_size, gamma)
-    elif scheduler_type == 'multi-step-lr':
+    elif scheduler_type == 'multi-step-lr': # this is used in training according to config.yaml
         gamma = sched_cfg.gamma
         milestones = sched_cfg.milestones
         logger.info('Building scheduler: MultiStepLR(milestone={}, gamma={})',
