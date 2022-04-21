@@ -2,10 +2,7 @@
 
 # change from stirling.py
 
-import sys
-import os
 import os.path as osp
-import pickle
 
 import time
 
@@ -24,6 +21,9 @@ FOLDER_MAP_FNAME = 'folder_map.pkl'
 
 
 class Stirling3D(dutils.Dataset):
+    '''
+    The class of the dataloader designed for the NoW test-dataset (a face specific dataset)
+    '''
     def __init__(self, data_path='data/now/NoW_Dataset',
                  head_only=True,
                  split='test',
@@ -32,11 +32,11 @@ class Stirling3D(dutils.Dataset):
                  transforms=None,
                  **kwargs):
         super(Stirling3D, self).__init__()
-        assert head_only, 'Stirling3D can only be used as a head only dataset'
+        assert head_only, 'Stirling3D/NoW can only be used as a head only dataset'
 
         self.split = split
         assert 'test' in split, (
-            f'Stirling3D can only be used for testing, but got split: {split}'
+            f'Stirling3D/NoW can only be used for testing, but got split: {split}'
         )
         if metrics is None:
             metrics = []
@@ -45,15 +45,11 @@ class Stirling3D(dutils.Dataset):
         self.data_path = osp.expandvars(osp.expanduser(data_path))
         self.transforms = transforms
         self.dtype = dtype
-
+        
+        # the absolute dir of images
         img_dir=osp.join('/data/panyuqing/expose_experts',self.data_path, 'final_release_version', 'iphone_pictures')
         bbox_dir=osp.join('/data/panyuqing/expose_experts',self.data_path, 'final_release_version', 'detected_face')
-        # self.img_paths = np.array(
-        #     [osp.join(img_dir, fname)
-        #      for fname in sorted(os.listdir(img_dir+'/*/*/*.jpg'))]
-        # )
-        #evaluation_img_path='data/now/imagepathsvalidation.txt'
-        evaluation_img_path='data/now/imagepathstest.txt'
+        evaluation_img_path='data/now/imagepathstest.txt' # all testing imgs' paths list
 
         with open(evaluation_img_path,'r',encoding='utf-8') as ef:
             filepaths=ef.readlines()
@@ -66,7 +62,6 @@ class Stirling3D(dutils.Dataset):
                 for fname in filepaths]
             )
         
-        #self.img_paths=self.img_paths[:5]
         self.num_items = len(self.img_paths)
         logger.info('self.num_items: {}',self.num_items)
 
@@ -89,11 +84,9 @@ class Stirling3D(dutils.Dataset):
         return f'Stirling3D/{self.split}'
 
     def __getitem__(self, index):
-        #logger.info('self.img_paths[index]: {}',self.img_paths[index])
-        #logger.info('exists:  {}',osp.exists(self.img_paths[index]))
-        #logger.info('bbox_path: {}',self.bbox_paths[index])
-        #logger.info('exists:  {}',osp.exists(self.bbox_paths[index]))
-
+        '''
+        get a data item with targeted labels from the dataloader
+        '''
         full_img = read_img(self.img_paths[index])
         bbox_path=self.bbox_paths[index]
         gt_bbox=np.load(bbox_path,allow_pickle=True, encoding='latin1')
@@ -118,11 +111,9 @@ class Stirling3D(dutils.Dataset):
             #logger.info('left {}, right {}, newtop {}, newbottom {}',left,right,newtop,newbottom)
             img=full_img[newtop:newbottom+1,left:right+1, :]
         
-        #img = full_img
         H, W, _ = img.shape
         bbox = np.array([0, 0, W - 1, H - 1], dtype=np.float32)
-        
-        
+                
         target = BoundingBox(bbox, size=img.shape)
 
         center = np.array([W, H], dtype=np.float32) * 0.5

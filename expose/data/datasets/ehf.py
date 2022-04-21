@@ -14,15 +14,8 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-
-import sys
 import os
 import os.path as osp
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 import torch
 import torch.utils.data as dutils
@@ -44,7 +37,9 @@ from plyfile import PlyData
 
 
 class EHF(dutils.Dataset):
-
+    '''
+    The class of the dataloader designed for the EHF evaluation dataset.
+    '''
     def __init__(self, data_folder, img_folder='images',
                  keyp_folder='keypoints',
                  alignments_folder='alignments',
@@ -66,7 +61,7 @@ class EHF(dutils.Dataset):
                  **kwargs):
         super(EHF, self).__init__()
         if metrics is None:
-            metrics = ['v2v']
+            metrics = ['v2v'] # the evaluation metrics of EHF (vertex to vertex as default)
         self.metrics = metrics
 
         self.dtype = dtype
@@ -83,7 +78,7 @@ class EHF(dutils.Dataset):
         #self.keypoints3d = keypoint_data['gt_keypoints_3d']
         #self.joints14 = keypoint_data['gt_joints14']
         #if not use_face_contour:
-            #self.keypoints = self.keypoints[:, :-17]
+            #self.keypoints = self.keypoints[:, :-17] # NO GT keypoints are availabel in public websites
 
         self.is_train = 'train' in split
         self.split = split
@@ -95,14 +90,7 @@ class EHF(dutils.Dataset):
         self.hand_thresh = hand_thresh
         self.face_thresh = face_thresh
         self.binarization = binarization
-
-        #annot_fn = osp.join(self.data_folder, 'annotations.yaml')
-        #with open(annot_fn, 'r') as annot_file:
-            #annotations = yaml.load(annot_file)
-        #self.annotations = annotations
-        #self.annotations = (self.annotations['train'] +
-        #                    self.annotations['test'])
-        #P add:
+        # annotations are scanned img files (length of the dataset is 100) 
         self.annotations=[]
         for i in range(1,101):
             if i < 10:
@@ -115,15 +103,11 @@ class EHF(dutils.Dataset):
         self.num_betas = num_betas
         self.num_expr_coeffs = num_expr_coeffs
         self.use_face_contour = use_face_contour
-
+        # all the data filenames for evaluation
         self.img_fns = sorted(
             os.listdir(osp.join(self.data_folder, self.img_folder)))
         
-        # filename_cont_path='/data/panyuqing/expose_experts/data/curated_fits/EHF_comp_img_fns.npy'
-        # tmp=np.load(filename_cont_path)
-        # self.img_fns = sorted(
-        #     os.listdir('/data/panyuqing/expose_experts/data/params3d_v/EHF'))
-
+        # idxs correlations to transform the sequence of keypoints from openpose25+hands+face to smplx
         source_idxs, target_idxs = dset_to_body_model(
              dset='openpose25+hands+face',
              model_type='smplx', use_hands=True, use_face=True,
@@ -132,6 +116,7 @@ class EHF(dutils.Dataset):
 
         self.source_idxs = np.asarray(source_idxs, dtype=np.int64)
         self.target_idxs = np.asarray(target_idxs, dtype=np.int64)
+        # get the idxs of body/hand/face keypoints in whole body keypoints
         idxs_dict = get_part_idxs()
         body_idxs = idxs_dict['body']
         hand_idxs = idxs_dict['hand']
@@ -167,6 +152,9 @@ class EHF(dutils.Dataset):
         return 1
 
     def __getitem__(self, index):
+        '''
+        get a data item with targeted labels from the dataloader
+        '''
         fn = self.annotations[index]
         img_path = osp.join(self.data_folder, self.img_folder,
                             fn + '.png')
@@ -175,9 +163,8 @@ class EHF(dutils.Dataset):
         _, fn = os.path.split(fn)
         
         #fn:66_img.png -> keypoint_fn:66_2Djnt.json
+        # read the ground truth keypoints info from downloaded files
         keypoint_fn=fn[:-3]+'2Djnt.json'
-        #print('fn: ',fn)
-        #print('keypoint_fn: ',keypoint_fn)
         keypoint_cont=open(osp.join(self.data_folder,self.keyp_folder,keypoint_fn),encoding='utf-8').read()
         keypoint_dict=json.loads(keypoint_cont)
         tmp=keypoint_dict["people"][0]
@@ -187,7 +174,7 @@ class EHF(dutils.Dataset):
         tmprh=np.array(tmp["hand_right_keypoints_2d"]).reshape((21,3))
         keypoints2d=np.concatenate((tmpbd,tmplh,tmprh,tmpfc)) #(137,3)
 
-        # Copy keypoints from the GT data
+        # rearrange the keypoints order to comform to the smplx model
         output_keypoints2d = np.zeros([127 + 17 * self.use_face_contour,
                                         3], dtype=np.float32)
         #output_keypoints2d[:, :-1] = self.keypoints[index].copy()
@@ -283,15 +270,10 @@ class EHF(dutils.Dataset):
         target.add_field('orig_center', orig_center)
         target.add_field('orig_bbox_size', bbox_size)
 
-        # alignment_path = osp.join(self.data_folder, self.alignments_folder,
-        #                           fn.replace('.07_C', '') + '.pkl')
-        # with open(alignment_path, 'rb') as alignment_file:
-        #     alignment_data = pickle.load(alignment_file, encoding='latin1')
-        
+        # read the ground truth vertices from scanned .ply files  
         alignment_path = osp.join(self.data_folder, self.alignments_folder,fn[:-3]+'align.ply')
         with open(alignment_path,'rb') as f:
             alignment_data = PlyData.read(f)
-            #vertices = alignment_data['v']
             vx=np.array(alignment_data['vertex'].data['x'])
             vy=np.array(alignment_data['vertex'].data['y'])
             vz=np.array(alignment_data['vertex'].data['z'])
@@ -308,7 +290,7 @@ class EHF(dutils.Dataset):
                                 -0.05704686818955933])
         camera_pose = cv2.Rodrigues(camera_pose)[0]
 
-        
+        # change the vertices by camera parameters
         cam_vertices = vertices.dot(camera_pose.T) + transl.reshape(1, 3)
         #print('vertices shape: ',vertices.shape)#(10475, 3)
         #print('cam_vertices shape: ',cam_vertices.shape)#(10475, 3)
@@ -324,7 +306,8 @@ class EHF(dutils.Dataset):
         #joints3d = self.joints14[index]
         #joints = Joints(joints3d[:14])
         #target.add_field('joints14', joints)
-
+        
+        # do the same transformation as that before training, to get close model effect
         if self.transforms is not None:
             force_flip = False
             if self.hand_only and not is_right:

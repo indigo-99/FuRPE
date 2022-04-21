@@ -15,7 +15,6 @@
 # Contact: ps-license@tuebingen.mpg.de
 
 
-import sys
 import os
 import os.path as osp
 import pickle
@@ -41,11 +40,12 @@ from ...utils.rotation_utils import batch_rodrigues
 from smplx import build_layer as build_body_model
 from fvcore.common.config import CfgNode as CN
 
-import sys
-import torch.nn.functional as F
-
 
 class CuratedFittings(dutils.Dataset):
+    '''
+    The class of the dataloader designed for the Curated_Fittings training dataset.
+    Add MPI, 3DPW train, COCO 2017 datasets (only the first one contributes to a better model effect)
+    '''
     def __init__(self, data_path='data/curated_fits',
                  split='train',
                  img_folder='',
@@ -70,15 +70,18 @@ class CuratedFittings(dutils.Dataset):
                  vertex_flip_correspondences='',
                  **kwargs):
         super(CuratedFittings, self).__init__()
-
         assert nand(head_only, hand_only), (
             'Hand only and head only can\'t be True at the same time')
-
+        
+        # whether or not to set low/high conf keypoints' value to be 0/1
         self.binarization = binarization
+        
+        # NOT BEING USED
         if metrics is None:
             metrics = []
-        self.metrics = metrics
-        self.min_hand_keypoints = min_hand_keypoints
+        self.metrics = metrics 
+        # the minimal number of hand/head keypoints to be detected in a image for cropping part images and feeding into sub-networks
+        self.min_hand_keypoints = min_hand_keypoints # 8
         self.min_head_keypoints = min_head_keypoints
 
         if 'test' in split:
@@ -86,34 +89,32 @@ class CuratedFittings(dutils.Dataset):
         self.split = split
         self.is_train = 'train' in split
         self.num_betas = num_betas
-        self.return_params = return_params
+        self.return_params = return_params # whether or not to return ground truth parameters of the datasets, set True for training
 
-        self.head_only = head_only
-        self.hand_only = hand_only
+        self.head_only = head_only # False
+        self.hand_only = hand_only # False
 
-        data_path='data/curated_fits'
+        data_path='data/curated_fits' # the path of datasets
         data_path = osp.expandvars(osp.expanduser(data_path))
         self.data_path = osp.join(data_path, f'{split}.npz')
 
-        self.transforms = transforms
+        self.transforms = transforms # transforms of datasets set in config.yaml
         self.dtype = dtype
-
-        vertex_flip_correspondences = osp.expandvars(
-            vertex_flip_correspondences)
+        
+        # read the flipping correspondences of vertices, download from expose's website
+        vertex_flip_correspondences='data/smplx_flip_correspondences.npz'
         err_msg = (
             'Vertex flip correspondences path does not exist:' +
             f' {vertex_flip_correspondences}'
         )
-
-        vertex_flip_correspondences='data/smplx_flip_correspondences.npz'
         assert osp.exists(vertex_flip_correspondences), err_msg
         flip_data = np.load(vertex_flip_correspondences)
         self.bc = flip_data['bc']
         self.closest_faces = flip_data['closest_faces']
 
-        self.img_folder = osp.expandvars(osp.join(img_folder, split))
+        self.img_folder = osp.expandvars(osp.join(img_folder, split))# NOT BEING USED
         
-        # mean hand pose, add to target hand pose from frankmocap pseudo GT
+        # mean hand pose, add to the ground truth target hand pose from frankmocap pseudo GT (which should add up the mean hand pose to get final pose results)
         self.target_left_hand_mean=np.array([ 0.11167871,  0.04289218, -0.41644183,  0.10881133, -0.06598568,
                             -0.75622   , -0.09639297, -0.09091566, -0.18845929, -0.11809504,
                             0.05094385, -0.5295845 , -0.14369841,  0.0552417 , -0.7048571 ,
@@ -133,42 +134,50 @@ class CuratedFittings(dutils.Dataset):
                             0.37335458,  0.8509643 , -0.27692273,  0.09154807, -0.49983943,
                             -0.02655647, -0.05288088,  0.5355592 , -0.04596104,  0.27735803]).astype(np.float32).reshape(15,3)
 
-        self.use_face = use_face
-        self.use_hands = use_hands
-        self.use_face_contour = use_face_contour
-        self.model_type = model_type
-        self.keyp_format = keyp_format
-        self.num_expression_coeffs = num_expression_coeffs
-        self.body_thresh = body_thresh
-        self.hand_thresh = hand_thresh
-        self.face_thresh = face_thresh
+        self.use_face = use_face #True
+        self.use_hands = use_hands #True
+        self.use_face_contour = use_face_contour #True
+        self.model_type = model_type # smplx
+        self.keyp_format = keyp_format #'coco25'
+        self.num_expression_coeffs = num_expression_coeffs #10
+        self.body_thresh = body_thresh #0.1, the threshold of the confidence of keypoints to be trusted
+        self.hand_thresh = hand_thresh #0.2
+        self.face_thresh = face_thresh #0.4
 
-        data = np.load(self.data_path, allow_pickle=True)
+        data = np.load(self.data_path, allow_pickle=True) # load the raw ground truth data in .npz file
         data = {key: data[key] for key in data.keys()}
-
         self.keypoints2D = data['keypoints2D'].astype(np.float32)#(n,137,3) 
+        # all img files' name list
         img_fns = np.asarray(data['img_fns'], dtype=np.string_)
         img_fns_d=[img_fns[i].decode('utf-8') for i in range(len(img_fns))]#range(3000)]
         self.comp_img_fns=[osp.join('data',ifn) for ifn in img_fns_d]
+        # total number of data
         self.num_items = len(img_fns_d)
         self.indices = None
         del img_fns
         del img_fns_d
-
+        
+        # add the pseudo ground truth data generated by 3 experts and integrated them with final vertices, feature, etc. into this dir 
         self.save_3dparam_vertices=os.path.join('data', 'params3d_v')
         
-        del_indexes=[]
+        del_indexes=[] # the indexes of data to be deleted because they cannot be labeled by experts
         if self.split == 'train':
-            # add mpi data 
+            # get the paths of the Curated_Fittings training data
             all_image_name_path=osp.join(data_path,'comp_img_fns.npy')
+            
+            # add MPI training data 
             S_num_list=['S2_Seq2','S3_Seq2','S4_Seq2','S5_Seq2','S6_Seq2','S7_Seq2','S8_Seq2']
-            add_image_name_path=[osp.join(data_path,'mpi_'+S_num+'_comp_img_fns_withhand.npy') for S_num in S_num_list]   
-            #add_image_name_path=[osp.join(data_path,'mpi_'+S_num+'_comp_img_fns_del12.npy') for S_num in S_num_list]
+            
+            # get the paths of added data
+            add_image_name_path=[osp.join(data_path,'mpi_'+S_num+'_comp_img_fns_del12.npy') for S_num in S_num_list]
+            # try to add MPI data whose hands can be detected for training the model, with data which all contains hands 
+            #add_image_name_path=[osp.join(data_path,'mpi_'+S_num+'_comp_img_fns_withhand.npy') for S_num in S_num_list]   
             if osp.exists(all_image_name_path):
-                self.comp_img_fns=[]#list(np.load(all_image_name_path, allow_pickle=True))
+                self.comp_img_fns=list(np.load(all_image_name_path, allow_pickle=True))
                 raw_len=len(self.comp_img_fns)
                 for p in add_image_name_path:
                     if osp.exists(p):
+                        # add new data filenames to the training data list
                         self.comp_img_fns+=list(np.load(p, allow_pickle=True))
             
             # add coco2017 data             
@@ -211,9 +220,8 @@ class CuratedFittings(dutils.Dataset):
             self.is_right = np.asarray(data['is_right'], dtype=np.bool_)
         if 'dset_name' in data:
             self.dset_name = np.asarray(data['dset_name'], dtype=np.string_)
-        self.vertex_folder = osp.join(data_path, vertex_folder, split)
 
-
+        # idxs correlations to transform the sequence of keypoints from openpose25+hands+face to smplx
         source_idxs, target_idxs = dset_to_body_model(
             dset='openpose25+hands+face',
             model_type='smplx', use_hands=True, use_face=True,
@@ -221,7 +229,7 @@ class CuratedFittings(dutils.Dataset):
             keyp_format=self.keyp_format)
         self.source_idxs = np.asarray(source_idxs, dtype=np.int64)
         self.target_idxs = np.asarray(target_idxs, dtype=np.int64)
-
+        # idxs correlations to transform the sequence of keypoints from coco to smplx
         coco_source_idxs, coco_target_idxs = dset_to_body_model(
             dset='coco',
             model_type='smplx', use_hands=True, use_face=True,
@@ -230,6 +238,7 @@ class CuratedFittings(dutils.Dataset):
         self.coco_source_idxs = np.asarray(coco_source_idxs, dtype=np.int64)
         self.coco_target_idxs = np.asarray(coco_target_idxs, dtype=np.int64)
 
+        # get the idxs of body/hand/face keypoints in whole body keypoints
         idxs_dict = get_part_idxs()
         body_idxs = idxs_dict['body']
         hand_idxs = idxs_dict['hand']
@@ -252,7 +261,7 @@ class CuratedFittings(dutils.Dataset):
         self.head_dset_factor = 2.0
         self.hand_dset_factor = 2.0
 
-        # P add:
+        # when evaluation, read the raw ground truth labels of Curated Fittings
         if split=='val':
             self.betas = data['betas'].astype(np.float32)
             self.expression = data['expression'].astype(np.float32)
@@ -332,8 +341,10 @@ class CuratedFittings(dutils.Dataset):
     def only_2d(self):
         return False
     
-
     def __getitem__(self, index):
+        '''
+        get a data item with targeted labels from the dataloader
+        '''
         img_index = index
         if self.indices is not None:
             img_index = self.indices[index]
@@ -342,22 +353,20 @@ class CuratedFittings(dutils.Dataset):
         if self.is_right is not None:
             if img_index<len(self.is_right):
                 is_right = self.is_right[img_index]
-
+        
+        # flag to distinguish the added data (MPI, 3DPW train, etc.) to process differently
         is_add_data=False
-
         img_fn = self.comp_img_fns[img_index] # data/lsp/lspet/images/im03019.png
-
         if not osp.exists(img_fn):
             logger.info('img not exist: {}',img_fn)
         img = read_img(img_fn)
-        # distil from 3 experts
         img_name=img_fn.split('/')[-1].split('\\')[-1].split('.')[0] #im03019
         if 'add_data' in img_fn:
-            # not curated_fittings data, i.e. adding data
             is_add_data=True
             img_dir_tmp=osp.dirname(img_fn)#add_data/mpi/S2/images
             img_dir=img_dir_tmp.replace('images', '')#/xxx strip has problems! #add_data/mpi/S2
         
+        # during training, read pseudo ground truth saved in advance generated by 3 part experts
         if self.split == 'train':
             if is_add_data:
                 if 'coco2017' in img_dir:
@@ -413,12 +422,12 @@ class CuratedFittings(dutils.Dataset):
             body_pose = param3d_vertices_data['body_pose']#.detach().cpu().numpy()#.astype(np.float32) 
             global_pose=param3d_vertices_data['global_orient']#.detach().cpu().numpy()
 
-            # Pad to compensate for extra keypoints
+            # rearrange the keypoints order to comform to the smplx model
             output_keypoints2d = np.zeros([127 + 17 * self.use_face_contour,
                                         3], dtype=np.float32)
 
             if is_add_data is False:
-                keypoints2d = self.keypoints2D[img_index]#(137,3), but SPIN joints(49,3)
+                keypoints2d = self.keypoints2D[img_index]#(137,3), SPIN joints(49,3)
                 output_keypoints2d[self.target_idxs] = keypoints2d[self.source_idxs]
             elif 'coco2017' in img_dir:
                 cont=json.load(open(osp.join(img_dir,'keypoints2d',img_name+'_keypoints.json'),encoding='utf-8'))
@@ -426,17 +435,15 @@ class CuratedFittings(dutils.Dataset):
                 keypoints2d=np.array(whole_kpt).reshape(133,3)
                 output_keypoints2d[self.coco_target_idxs] = keypoints2d[self.coco_source_idxs]
             else: # openpose format keypoints: mpi etc.
-                #tmp_path=osp.join(img_dir,'keypoints2d',img_name+'_keypoints.json')
+                # read 2d keypoints
                 cont=json.load(open(osp.join(img_dir,'keypoints2d',img_name+'_keypoints.json'),encoding='utf-8'))
-                
                 body_kp=np.array(cont['people'][0]['pose_keypoints_2d']).reshape(25,3)
                 face_kp=np.array(cont['people'][0]['face_keypoints_2d']).reshape(70,3)
                 left_hand_kp=np.array(cont['people'][0]['hand_left_keypoints_2d']).reshape(21,3)
                 right_hand_kp=np.array(cont['people'][0]['hand_right_keypoints_2d']).reshape(21,3)
-                #keypoints2d=np.concatenate((body_kp,face_kp,left_hand_kp,right_hand_kp))
+                # concat keypoints to the order: body, hand, face, and reorder them to comform to the smplx model
                 keypoints2d=np.concatenate((body_kp,left_hand_kp,right_hand_kp,face_kp))
                 output_keypoints2d[self.target_idxs] = keypoints2d[self.source_idxs]
-
 
             # Remove joints with negative confidence
             output_keypoints2d[output_keypoints2d[:, -1] < 0, -1] = 0
@@ -482,7 +489,8 @@ class CuratedFittings(dutils.Dataset):
                 output_keypoints2d[self.left_hand_idxs, -1] = left_hand_conf
                 output_keypoints2d[self.right_hand_idxs, -1] = right_hand_conf
                 output_keypoints2d[self.face_idxs, -1] = face_conf
-
+            
+            # build the targeted label for this data item
             target = Keypoints2D(
                 output_keypoints2d, img.shape, flip_axis=0, dtype=self.dtype)
 
@@ -497,6 +505,7 @@ class CuratedFittings(dutils.Dataset):
             #         keypoints3d, img.shape, flip_axis=0, dtype=self.dtype)
             #     target.add_field('keypoints3d', keypoints3d_field)
             
+            # add pseudo ground truth of features into the target for feature distiling during training
             if 'save_feature_body' in param3d_vertices_data:
                 save_feature_body=param3d_vertices_data['save_feature_body'].to(torch.float32)#torch.size[1, 1024]
                 target.add_field('save_feature_body', save_feature_body)
@@ -505,8 +514,6 @@ class CuratedFittings(dutils.Dataset):
                 if 'save_feature_face' in param3d_vertices_data:
                     save_feature_face=param3d_vertices_data['save_feature_face'].to(torch.float32)#torch.size[1, 1024]
                     target.add_field('save_feature_face', save_feature_face)
-                #else:
-                    #logger.info('index {} has no face feature? {}',img_index,img_fn)
 
             if self.head_only:
                 keypoints = output_keypoints2d[self.head_idxs, :-1]
@@ -521,6 +528,7 @@ class CuratedFittings(dutils.Dataset):
             has_left_hand = (has_left_hand and (output_keypoints2d[self.left_hand_idxs, -1].sum() >
                             self.min_hand_keypoints))
             
+            # add ground truth hand info to the target
             if has_left_hand:
                 left_hand_bbox = keyps_to_bbox(
                     output_keypoints2d[self.left_hand_idxs, :-1],
@@ -543,16 +551,11 @@ class CuratedFittings(dutils.Dataset):
                 else:
                     logger.info('index {} has no left hand feature? {}',img_index,img_fn)
                     logger.info('no left hand npy? {}',save_3dparam_vertices_path)
-                #else:
-                    #logger.info('index {} has no left hand feature? {}',img_index,img_fn)
 
             has_right_hand= (has_right_hand and (output_keypoints2d[self.right_hand_idxs, -1].sum() >
                             self.min_hand_keypoints))
 
             if has_right_hand:
-                # if is_add_data and ('coco2017' in img_dir):
-                #     right_hand_bbox = bbox_scale(right_bbox,img_size=img.shape, scale=1.5)
-                # else:
                 right_hand_bbox = keyps_to_bbox(
                     output_keypoints2d[self.right_hand_idxs, :-1],
                     output_keypoints2d[self.right_hand_idxs, -1],
@@ -578,9 +581,6 @@ class CuratedFittings(dutils.Dataset):
                         self.min_head_keypoints))
 
             if has_head:
-                # if is_add_data and ('coco2017' in img_dir):
-                #     head_bbox = bbox_scale(face_bbox,img_size=img.shape, scale=1.2)
-                # else:
                 head_bbox = keyps_to_bbox(
                     output_keypoints2d[self.head_idxs, :-1],
                     output_keypoints2d[self.head_idxs, -1],
@@ -598,23 +598,15 @@ class CuratedFittings(dutils.Dataset):
             else:
                 dset_scale_factor = self.body_dset_factor
             
-            # if is_add_data and ('coco2017' in img_dir):
-            #     center, scale, bbox_size = bbox_to_center_scale(
-            #         bbox_scale(body_bbox,img_size=img.shape),
-            #         dset_scale_factor=dset_scale_factor,
-            #     )
-            # else:
             center, scale, bbox_size = bbox_to_center_scale(
                 keyps_to_bbox(keypoints, conf, img_size=img.shape),
                 dset_scale_factor=dset_scale_factor,
             )
             if (center is None) or (scale is None) or (bbox_size is None):
                 logger.info('none error img_fn: {}', img_fn)
-                #print('img_fn: ',img_fn)
                 if is_add_data:
                     tmp=osp.join(img_dir,'keypoints2d',img_name+'_keypoints.json')
                     logger.info('none error kp json path {}', tmp)
-                    #print('kp json path: ',tmp)
 
             target.add_field('center', center)
             target.add_field('scale', scale)
@@ -623,13 +615,14 @@ class CuratedFittings(dutils.Dataset):
             target.add_field('orig_center', center)
             target.add_field('orig_bbox_size', bbox_size)
 
+            # return the ground truth params by adding them into the target, for training use
+            # create several classes to wrap all the parameters (defined in expose/data/targets/)
             if self.return_params:
                 betas_field = Betas(betas=betas)
                 target.add_field('betas', betas_field)
                 global_pose_field = GlobalPose(global_pose=global_pose)
                 target.add_field('global_pose', global_pose_field)
                 body_pose_field = BodyPose(body_pose=body_pose)
-                #logger.info('body_pose: {}',body_pose)
                 target.add_field('body_pose', body_pose_field)
                 
                 if has_head:
@@ -650,12 +643,10 @@ class CuratedFittings(dutils.Dataset):
                                                 right_hand_pose=right_hand_pose)
                     target.add_field('hand_pose', hand_pose_field)
                 else:
-                    # logger.info('has left openpose(but no left): {}',(output_keypoints2d[self.left_hand_idxs, -1].sum() >
-                    #         self.min_hand_keypoints))
                     if output_keypoints2d[self.right_hand_idxs, -1].sum() > self.min_hand_keypoints:
                         logger.info('has right openpose (but no right pseudo label) img_fn: {}',img_fn)
                 
-
+            # add pseudo ground truth vertices to the target
             if hasattr(self, 'dset_name'):
                 #dset_name = self.dset_name[img_index].decode('utf-8')
                 H, W, _ = img.shape
@@ -668,11 +659,13 @@ class CuratedFittings(dutils.Dataset):
                 vertex_field = Vertices(
                     vertices_data, bc=self.bc, closest_faces=self.closest_faces)
                 target.add_field('vertices', vertex_field)
-
+            
+            # add the img name to the target
             target.add_field('fname', f'{img_index:05d}.jpg')
-            #P add:
+            # add the dataset name to the target
             target.add_field('name', 'curated_fits')
             cropped_image = img
+            # do transformation to imgs according to config.yaml
             if (self.transforms is not None):
                 force_flip = False
                 if is_right is not None:
@@ -684,11 +677,16 @@ class CuratedFittings(dutils.Dataset):
             return img, cropped_image, cropped_target, img_index
         
         elif self.split == 'val':
+            # during evaluation, use the raw code of expose (read the raw ground truth label, not pseudo ones)
             return self.get_item_val(index)
         else:
-            print('strange split value: ',self.split)
+            logger.info('invalid split value: {}',self.split)
         
     def get_item_val(self,index):
+        '''
+        get a data item during evaluation, 
+        use the raw code of expose (read the raw ground truth label, not pseudo ones)
+        '''
         is_right = None
         if self.is_right is not None:
             is_right = self.is_right[index]
@@ -705,7 +703,7 @@ class CuratedFittings(dutils.Dataset):
             23 + eye_offset:23 + eye_offset + 15].reshape(-1)
         right_hand_pose = pose[23 + 15 + eye_offset:].reshape(-1)
 
-        #P add:
+        # translate GT pose parameters from axis-angle to rotation matrix, to inputting into the smplx model and get vertices
         pose_torch=torch.from_numpy(pose)
         pose_mat=batch_rodrigues(pose_torch)
         global_pose_mat = pose_mat[0].reshape(-1, 1, 3, 3)
@@ -845,7 +843,7 @@ class CuratedFittings(dutils.Dataset):
         target.add_field('orig_center', center)
         target.add_field('orig_bbox_size', bbox_size)
 
-        #  #  start = time.perf_counter()
+        #  start = time.perf_counter()
         if self.return_params:
             betas_field = Betas(betas=betas)
             target.add_field('betas', betas_field)
@@ -863,7 +861,7 @@ class CuratedFittings(dutils.Dataset):
             target.add_field('jaw_pose', jaw_pose_field)
 
         if hasattr(self, 'dset_name'):
-            dset_name = self.dset_name[index].decode('utf-8')
+            #dset_name = self.dset_name[index].decode('utf-8') #NOT BEING USED
             final_body_parameters = {
                 'global_orient': global_pose_mat, #3 cannot be reshaped to [1,3,3]
                 'body_pose': body_pose_mat,
@@ -876,8 +874,6 @@ class CuratedFittings(dutils.Dataset):
             final_body_model_output = self.body_model(
                 get_skin=True, return_shaped=True, **final_body_parameters)
             vertices=final_body_model_output['vertices'].detach().cpu().numpy()
-            #try not to put big data on cpu 
-            #vertices=final_body_model_output['vertices']
             vertices=vertices.reshape((vertices.shape[1],vertices.shape[2]))
 
             H, W, _ = img.shape
@@ -890,11 +886,12 @@ class CuratedFittings(dutils.Dataset):
             vertex_field = Vertices(
                 vertices, bc=self.bc, closest_faces=self.closest_faces)
             target.add_field('vertices', vertex_field)
-
+        # add the file name into the target:
         target.add_field('fname', f'{index:05d}.jpg')
-        #P add:
+        # add the dataset's name into the target:
         target.add_field('name', 'curated_fits')
         cropped_image = None
+        # do the same transformation as that before training, to get close model effect
         if self.transforms is not None:
             force_flip = False
             if is_right is not None:

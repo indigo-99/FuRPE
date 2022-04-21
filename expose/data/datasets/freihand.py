@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import sys
-import os
 import os.path as osp
 import pickle
 
@@ -23,13 +21,14 @@ from ..utils.bbox import keyps_to_bbox, bbox_to_center_scale
 
 from ...utils.img_utils import read_img
 
-FOLDER_MAP_FNAME = 'folder_map.pkl'
-
 IMG_SIZE = 224
 REF_BOX_SIZE = 200
 
 
 class FreiHand(dutils.Dataset):
+    '''
+    The class of the dataloader designed for the Freihand test-dataset (a hand specific dataset )
+    '''
     def __init__(self, data_path='data/freihand',
                  hand_only=True,
                  split='train',
@@ -99,16 +98,14 @@ class FreiHand(dutils.Dataset):
         logger.info(f'Loading parameters: {elapsed}')
 
         mean_pose_path = 'data/all_means.pkl'
-        #'$CLUSTER_HOME/SMPL_HF_Regressor_data/data/all_means.pkl')
         mean_poses_dict = {}
         if osp.exists(mean_pose_path):
             logger.info('Loading mean pose from: {} ', mean_pose_path)
             with open(mean_pose_path, 'rb') as f:
                 mean_poses_dict = pickle.load(f)
 
-        if self.split != 'test':
+        if self.split != 'test': #NOT BEING USED, only use the freihand testset
             split_size = 0.8
-            #  num_items = len(xyz) * 4
             num_green_bg = len(xyz)
             # For green background images
             train_idxs = np.arange(0, int(split_size * num_green_bg))
@@ -129,7 +126,6 @@ class FreiHand(dutils.Dataset):
         elif split == 'val':
             self.img_idxs = self.val_idxs
             self.param_idxs = self.val_idxs % num_green_bg
-            #  self.start = len(self.train_idxs)
         elif 'test' in split:
             self.img_idxs = np.arange(len(intrinsics))
             self.param_idxs = np.arange(len(intrinsics))
@@ -147,26 +143,13 @@ class FreiHand(dutils.Dataset):
             self.poses = param[:, :48].reshape(num_green_bg, -1, 3)
             self.poses[:, 1:] += right_hand_mean[np.newaxis]
             self.betas = param[:, 48:58].copy()
-            #p add
+
             intrinsics = np.asarray(intrinsics, dtype=np.float32)
             self.intrinsics = intrinsics
-            #logger.info('self.split: {}',self.split)
-            #logger.info('self.intrinsics shape: {}',self.intrinsics.shape)
-            
+   
             if self.return_vertices:
                 self.vertices = vertices
             self.xyz = xyz
-        
-        #not use
-        folder_map_fname = osp.expandvars(
-            osp.join(self.data_path, split, FOLDER_MAP_FNAME))
-        self.use_folder_split = osp.exists(folder_map_fname)
-        if self.use_folder_split:
-            self.img_folder = osp.join(self.data_path, split)
-            logger.info(self.img_folder)
-            with open(folder_map_fname, 'rb') as f:
-                data_dict = pickle.load(f)
-            self.items_per_folder = max(data_dict.values())
 
         if joints_to_ign is None:
             joints_to_ign = []
@@ -199,15 +182,14 @@ class FreiHand(dutils.Dataset):
         return uv[:, :2] / uv[:, -1:]
 
     def __getitem__(self, index):
+        '''
+        get a data item with targeted labels from the dataloader
+        '''
         img_idx = self.img_idxs[index]
         param_idx = self.param_idxs[index]
 
-        if self.use_folder_split:
-            folder_idx = index // self.items_per_folder
-            file_idx = index
-
         K = self.intrinsics[param_idx].copy()
-        if 'test' not in self.split:
+        if 'test' not in self.split: # only trainset has GT parameters, testset's label is not public
             pose = self.poses[param_idx].copy()
 
             global_pose = pose[0].reshape(-1)
@@ -231,13 +213,7 @@ class FreiHand(dutils.Dataset):
             )
 
         #  logger.info('Reading keypoints: {}', time.perf_counter() - start)
-        #not use
-        if self.use_folder_split:
-            img_fn = osp.join(
-                self.img_folder, f'folder_{folder_idx:010d}',
-                f'{file_idx:010d}.jpg')
-        else:
-            img_fn = osp.join(self.img_folder, f'{img_idx:08d}.jpg')
+        img_fn = osp.join(self.img_folder, f'{img_idx:08d}.jpg')
 
         #  start = time.perf_counter()
         img = read_img(img_fn)
@@ -274,12 +250,10 @@ class FreiHand(dutils.Dataset):
         target.add_field('center', center)
         scale = IMG_SIZE / REF_BOX_SIZE
         target.add_field('scale', scale)
-        #  target.bbox = np.asarray([0, 0, IMG_SIZE, IMG_SIZE], dtype=np.float32)
-
         #  target.add_field('camera', WeakPerspectiveCamera(focal, pp))
 
         #  start = time.perf_counter()
-        if self.return_params:
+        if self.return_params: # False during testing, because no testsets' GT values are public
             global_pose_field = GlobalPose(global_pose=global_pose)
             target.add_field('global_pose', global_pose_field)
             hand_pose_field = HandPose(right_hand_pose=right_hand_pose,
@@ -298,7 +272,6 @@ class FreiHand(dutils.Dataset):
             target.add_field('vertices', hand_vertices_field)
         if self.return_shape:
             target.add_field('betas', Betas(self.betas[param_idx]))
-
         #  print('SMPL-HF Field {}'.format(time.perf_counter() - start))
 
         #  start = time.perf_counter()
@@ -308,12 +281,4 @@ class FreiHand(dutils.Dataset):
         #  logger.info('Transforms: {}'.format(time.perf_counter() - start))
 
         target.add_field('name', self.name())
-        # Key used to access the fit dict
-        #  img_fn = osp.split(self.img_fns[index])[1].decode('utf-8')
-
-        #  dict_key = ['curated_fits', img_fn, index]
-
-        #  dict_key = tuple(dict_key)
-        #  target.add_field('dict_key', dict_key)
-
         return full_img, cropped_image, target, index
