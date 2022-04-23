@@ -49,12 +49,14 @@ from expose.data.targets.keypoints import FLIP_INDS
 
 from expose.utils.typing_utils import Tensor
 
-#p add
+# add mano model path for hand_only_training
 from manopth import manolayer
 _mano_root = '/data/panyuqing/MinimalHandPytorch/mano/models'
 
 class HandPredictor(nn.Module):
-
+    '''
+    the class of the hand pose estimation model 
+    '''
     def __init__(self, exp_cfg,
                  global_orient_desc,
                  hand_pose_desc,
@@ -64,7 +66,7 @@ class HandPredictor(nn.Module):
                  mean_pose_path='',
                  dtype=torch.float32):
         super(HandPredictor, self).__init__()
-
+        # get the hand sub-network configs
         network_cfg = exp_cfg.get('network', {})
         attention_net_cfg = network_cfg.get('attention', {})
         hand_net_cfg = attention_net_cfg.get('hand', {})
@@ -92,6 +94,7 @@ class HandPredictor(nn.Module):
         shape_mean = torch.zeros([self.num_betas], dtype=dtype)
         self.register_buffer('shape_mean', shape_mean)
 
+        # build the hand pose decoders
         self.global_orient_decoder = global_orient_desc.decoder
         cfg = {'param_type': global_orient_desc.decoder.get_type()}
         self.wrist_pose_decoder = build_pose_decoder(cfg, 1)
@@ -106,7 +109,8 @@ class HandPredictor(nn.Module):
         hand_pose_mean = hand_pose_desc.mean
         self.register_buffer('hand_pose_mean', hand_pose_mean)
         hand_pose_dim = hand_pose_desc.dim
-
+        
+        # get the mean parameters list and their idxs in the mean_lst
         mean_lst = []
         start = 0
         wrist_pose_idxs = list(range(start, start + wrist_pose_dim))
@@ -141,7 +145,7 @@ class HandPredictor(nn.Module):
         param_dim = param_mean.numel()
         self.param_dim = param_dim
 
-        # Construct the feature extraction backbone
+        # Construct the hand feature extraction backbone
         backbone_cfg = hand_net_cfg.get('backbone', {})
         self.backbone, feat_dims = build_backbone(backbone_cfg) #resnet18, same as head_predictor.py
 
@@ -151,7 +155,8 @@ class HandPredictor(nn.Module):
         self.feature_key = hand_net_cfg.get('feature_key', 'avg_pooling') # avg_pooling in config
         feat_dim = feat_dims[self.feature_key]
         self.feat_dim = feat_dim
-
+        
+        # Construct the hand pose regressor
         regressor_cfg = hand_net_cfg.get('mlp', {})
         regressor = MLP(feat_dim + self.append_params * param_dim,
                         param_dim, **regressor_cfg)
@@ -159,6 +164,7 @@ class HandPredictor(nn.Module):
             regressor, param_mean, detach_mean=detach_mean,
             num_stages=self.num_stages)
         
+        # whether or not to stop updating the hand sub-network (backbone and regressor)
         freeze_hand_backbone=False#True
         if freeze_hand_backbone:
             for param in self.backbone.parameters():
@@ -170,7 +176,7 @@ class HandPredictor(nn.Module):
             # self.regressor = FrozenBatchNorm2d.convert_frozen_batchnorm(
             #     self.regressor)
         
-        #p add mano
+        # add the initialization of the mano model to generate hand vertices from hand parameters
         self.mano = manolayer.ManoLayer(flat_hand_mean=False, #True, # don't need mean hand params, start from flat hand
                         side="right",
                         mano_root=_mano_root,
@@ -233,6 +239,7 @@ class HandPredictor(nn.Module):
         raise NotImplementedError
 
     def param_tensor_to_dict(self, param_tensor):
+        ''' Converts a flattened tensor to a dictionary of hand parameters '''
         wrist_pose = torch.index_select(param_tensor, 1, self.wrist_pose_idxs)
         hand_pose = torch.index_select(param_tensor, 1, self.hand_pose_idxs)
 
@@ -249,7 +256,16 @@ class HandPredictor(nn.Module):
                 num_hand_imgs: int = 0,
                 device: torch.device = None,
                 ) -> Dict[str, Dict[str, Tensor]]:
-        ''' Forward pass of the hand predictor '''
+        ''' 
+        processing of the predictor
+        input:
+            hand_imgs: training/testing data
+            num_hand_imgs: the number of training/testing hand specific data (not being used during training)
+            hand_mean: training/testing hand specific ground truth labels (not being used during training)
+            parent_rots: the rotation matrix of hands' parent joints
+        output:
+            a dict of predicted hand parameters
+        '''
         batch_size = hand_imgs.shape[0]
         num_body_data = batch_size - num_hand_imgs
         if batch_size == 0:
@@ -314,7 +330,7 @@ class HandPredictor(nn.Module):
                      raw_left_wrist_pose=raw_left_wrist_pose,#none
                      raw_right_hand_pose=parameters_dict['hand_pose'],
                      )
-            )#len: 3
+            )# stage len: 3
             
 
             if self.hand_model_type == 'mano':
@@ -329,7 +345,7 @@ class HandPredictor(nn.Module):
                 raise RuntimeError(
                     f'Invalid hand model type: {self.hand_model_type}')
 
-        # P add : for training hand-sub-networks
+        # add for training hand-sub-networks
         pred_wrist_pose = model_parameters[-1]['wrist_pose'] #[64, 1, 3, 3]
         pred_hand_pose = model_parameters[-1]['hand_pose'] #[64, 15, 3, 3]
         total_hand_pose = torch.cat((pred_wrist_pose, pred_hand_pose),1)#[64, 16, 3, 3]
@@ -354,10 +370,10 @@ class HandPredictor(nn.Module):
         
         
         output = {'num_stages': self.num_stages,
-                  'features': hand_features[self.feature_key], # add
-                  'proj_joints':proj_joints, # add
-                  'joints':joints3d, # add
-                  #'vertices':hand_vertices, # add
+                  'features': hand_features[self.feature_key], # 
+                  'proj_joints':proj_joints, # 
+                  'joints':joints3d, # 
+                  #'vertices':hand_vertices, 
                   }
         output['camera_parameters'] = CameraParams(
             translation=translation, scale=scale) 
@@ -366,6 +382,6 @@ class HandPredictor(nn.Module):
             # Only update the current stage if the parameters exist
             key = f'stage_{stage:02d}'
             output[key] = model_parameters[stage]
-        # add
+        # add vertices to the output dict
         output['stage_02']['vertices']=hand_vertices
         return output

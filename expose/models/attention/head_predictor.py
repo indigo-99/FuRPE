@@ -50,7 +50,9 @@ from expose.utils.typing_utils import Tensor
 
 
 class HeadPredictor(nn.Module):
-
+    '''
+    the class of the head pose estimation model 
+    '''
     def __init__(self, exp_cfg,
                  global_orient_desc,
                  jaw_pose_desc,
@@ -58,29 +60,21 @@ class HeadPredictor(nn.Module):
                  detach_mean=False,
                  dtype=torch.float32):
         super(HeadPredictor, self).__init__()
-
+        # get the head sub-network configs
         network_cfg = exp_cfg.get('network', {})
         attention_net_cfg = network_cfg.get('attention', {})
         head_net_cfg = attention_net_cfg.get('head', {})
-
-        self.neck_index = KEYPOINT_NAMES.index('neck')
-
         head_model_cfg = exp_cfg.get('head_model', {})
-        #  model_path = osp.expandvars(head_model_cfg.pop('model_folder', ''))
         model_type = head_model_cfg.pop('type', 'flame')
         self.head_model_type = model_type
-        #  self.head_model = build_layer(
-        #  model_path,
-        #  model_type=model_type,
-        #  dtype=dtype,
-        #  **head_model_cfg)
-        #  logger.info(f'Head model: {self.head_model}')
 
+        #self.neck_index = KEYPOINT_NAMES.index('neck')
         self.num_stages = head_net_cfg.get('num_stages', 3)
         self.append_params = head_net_cfg.get('append_params', True)
 
         logger.info(f'Building head predictor with {self.num_stages} stages')
-
+        
+        # get the camera configs
         camera_cfg = head_net_cfg.get('camera', {})
         camera_data = build_cam_proj(camera_cfg, dtype=dtype)
         self.projection = camera_data['camera']
@@ -91,18 +85,17 @@ class HeadPredictor(nn.Module):
         self.camera_scale_func = camera_data['scale_func']
 
         self.num_betas = head_model_cfg.num_betas
-        #  self.num_betas = self.head_model.num_betas
         shape_mean = torch.zeros([self.num_betas], dtype=dtype)
         self.register_buffer('shape_mean', shape_mean)
 
-        #  self.num_expression_coeffs = self.head_model.num_expression_coeffs
         self.num_expression_coeffs = head_model_cfg.num_expression_coeffs
         expression_mean = torch.zeros(
             [self.num_expression_coeffs], dtype=dtype)
         self.register_buffer('expression_mean', expression_mean)
 
-        self.global_orient_decoder = global_orient_desc.decoder
+        #self.global_orient_decoder = global_orient_desc.decoder
 
+        # build the head pose decoders
         cfg = {'param_type': global_orient_desc.decoder.get_type()}
         self.neck_pose_decoder = build_pose_decoder(cfg, 1)
         neck_pose_mean = self.neck_pose_decoder.get_mean().clone()
@@ -118,6 +111,7 @@ class HeadPredictor(nn.Module):
         jaw_pose_mean = jaw_pose_desc.mean
         jaw_pose_dim = jaw_pose_desc.dim
 
+        # get the mean parameters list and their idxs in the mean_lst
         mean_lst = []
         start = 0
         neck_pose_idxs = list(range(start, start + neck_pose_dim))
@@ -158,7 +152,7 @@ class HeadPredictor(nn.Module):
         param_dim = param_mean.numel()
         self.param_dim = param_dim
 
-        # Construct the feature extraction backbone
+        # Construct the head feature extraction backbone
         backbone_cfg = head_net_cfg.get('backbone', {})
         self.backbone, feat_dims = build_backbone(backbone_cfg)
 
@@ -168,7 +162,7 @@ class HeadPredictor(nn.Module):
         self.feature_key = head_net_cfg.get('feature_key', 'avg_pooling')
         feat_dim = feat_dims[self.feature_key]
         self.feat_dim = feat_dim
-
+        # Construct the head pose regressor
         regressor_cfg = head_net_cfg.get('mlp', {})
         regressor = MLP(feat_dim + self.append_params * param_dim,
                         param_dim, **regressor_cfg)
@@ -176,13 +170,14 @@ class HeadPredictor(nn.Module):
             regressor, param_mean, detach_mean=detach_mean,
             num_stages=self.num_stages)
         
+        # whether or not to stop updating the head sub-network (backbone and regressor)
         freeze_face=True
         if freeze_face:
             for param in self.backbone.parameters():
                 param.requires_grad = False
             for param in self.regressor.parameters():
                 param.requires_grad = False
-            # Stop updating batch norm statistics
+            
             self.backbone = FrozenBatchNorm2d.convert_frozen_batchnorm(
                 self.backbone)
             self.regressor = FrozenBatchNorm2d.convert_frozen_batchnorm(
@@ -208,7 +203,7 @@ class HeadPredictor(nn.Module):
 
     def param_tensor_to_dict(
             self, param_tensor: Tensor) -> Dict[str, Tensor]:
-        ''' Converts a flattened tensor to a dictionary of tensors '''
+        ''' Converts a flattened tensor to a dictionary of hand parameters, according to params' idxs '''
         neck_pose = torch.index_select(param_tensor, 1,
                                        self.neck_pose_idxs)
         jaw_pose = torch.index_select(param_tensor, 1, self.jaw_pose_idxs)
@@ -280,15 +275,21 @@ class HeadPredictor(nn.Module):
                 head_mean: Optional[Tensor] = None,
                 device: torch.device = None,
                 ) -> Dict[str, Dict[str, Tensor]]:
-        '''
+        ''' 
+        processing of the predictor
+        input:
+            hand_imgs: training/testing data
+            hand_mean: hand mean parameters from the body network's output, for the hand sub-network to predict deltas based on them
+        output:
+            a dict of predicted head parameters
         '''
         batch_size = head_imgs.shape[0]
-        device, dtype = head_imgs.device, head_imgs.dtype
-
-        num_body_data = batch_size - num_head_imgs
+        #device, dtype = head_imgs.device, head_imgs.dtype
+        #num_body_data = batch_size - num_head_imgs
         if batch_size == 0:
             return {}
 
+        # predict head parameters
         head_features = self.backbone(head_imgs)
         head_parameters, head_deltas = self.regressor(
             head_features[self.feature_key],
@@ -333,7 +334,6 @@ class HeadPredictor(nn.Module):
         }
 
         for stage in range(self.num_stages):
-            # Only update the current stage if there are enough params
             key = f'stage_{stage:02d}'
             output[key] = model_parameters[stage]
 

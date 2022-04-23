@@ -22,6 +22,9 @@ from .generic_target import GenericTarget
 
 
 class Joints(GenericTarget):
+    '''
+    contains 3d joints
+    '''
     def __init__(self, joints, **kwargs):
         super(Joints, self).__init__()
         self.joints = joints

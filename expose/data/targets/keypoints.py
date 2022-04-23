@@ -131,6 +131,9 @@ class Keypoints2D(GenericTarget):
         return keypoints
 
     def get_keypoints_and_conf(self, key='all'):
+        '''
+        get a specific part of keypoints: hand / body / head / all 
+        '''
         if key == 'all':
             keyp_data = [self.smplx_keypoints, self.conf]
         elif key == 'body':
@@ -253,7 +256,7 @@ class Keypoints2D(GenericTarget):
             keypoints.add_field(k, v)
         return keypoints
 
-
+'''the names of 144 whole body keypoints'''
 KEYPOINT_NAMES = [
     'pelvis',
     'left_hip',
@@ -402,6 +405,7 @@ KEYPOINT_NAMES = [
     'left_contour_1',
 ]
 
+'''the names of 20 right_hand mano keypoints'''
 MANO_NAMES = [
     'right_wrist',
     'right_index1',
@@ -425,7 +429,7 @@ MANO_NAMES = [
     'right_ring',
     'right_pinky']
 
-
+'''the keypoinst names' reference to a certain part(body/hand/head)'''
 KEYPOINT_PARTS = {'pelvis': 'body',
                   'left_hip': 'body',
                   'right_hip': 'body',
@@ -571,7 +575,7 @@ KEYPOINT_PARTS = {'pelvis': 'body',
                   'left_contour_2': 'face,head,flame',
                   'left_contour_1': 'face,head,flame'}
 
-
+'''get the idxs of a certain part's keypoints'''
 def get_part_idxs():
     body_idxs = np.asarray([
         idx
@@ -629,7 +633,7 @@ RIGHT_HAND_KEYPOINT_NAMES = [KEYPOINT_NAMES[ii] for ii in RIGHT_HAND_IDXS]
 HEAD_KEYPOINT_NAMES = [KEYPOINT_NAMES[ii] for ii in HEAD_IDXS]
 FLAME_KEYPOINT_NAMES = [KEYPOINT_NAMES[ii] for ii in FLAME_IDXS]
 
-
+'''connections between keypoints for visualization'''
 CONNECTIONS = [
     ['left_eye', 'nose'],
     ['right_eye', 'nose'],
@@ -975,7 +979,7 @@ def kp_connections(keypoints):
     ]
     return kp_lines
 
-
+'''flip keypoints' names for hands'''
 FLIP_MAP = {}
 for keyp_name in KEYPOINT_NAMES:
     if 'left' in keyp_name:
@@ -1036,6 +1040,7 @@ Keypoints2D.CONNECTIONS = np.asarray(ALL_CONNECTIONS).reshape(-1, 2)
 
 
 class Keypoints3D(Keypoints2D):
+    '''the class for 3d keypoints'''
     def __init__(self, *args, **kwargs):
         super(Keypoints3D, self).__init__(*args, **kwargs)
 
@@ -1121,7 +1126,7 @@ class Keypoints3D(Keypoints2D):
 
         return keypoints
 
-
+'''the names of openpose joints'''
 OPENPOSE_JOINTS = [
     'nose', 'neck',
     'right_shoulder', 'right_elbow', 'right_wrist',
@@ -1214,6 +1219,7 @@ OPENPOSE_JOINTS = [
     'right_lip_3',
 ]
 
+'''137 whole body joints' names'''
 FEET_KEYPS_NAMES = ['left_big_toe', 'left_small_toe', 'left_heel',
                     'right_big_toe', 'right_small_toe', 'right_heel']
 OPENPOSE_JOINTS25 = deepcopy(OPENPOSE_JOINTS)
@@ -1222,6 +1228,7 @@ for feet_name in FEET_KEYPS_NAMES:
     OPENPOSE_JOINTS25.insert(start, feet_name)
     start += 1
 
+'''the names of mpii joints'''
 MPII_JOINTS = [
     'right_ankle',
     'right_knee',
@@ -1254,7 +1261,7 @@ MPII_JOINTS = [
     'right_pinky1', 'right_pinky2', 'right_pinky3', 'right_pinky',
 ]
 
-
+'''the names of FFHQ(a head dataset) joints'''
 FFHQ_KEYPOINTS = [
     'global',
     'neck',
@@ -1352,7 +1359,7 @@ FFHQ_KEYPOINTS = [
 #                   'left_ankle',
 #                   'right_ankle',
 #                   'pelvis']
-# P add to coco wholeBody (COCO 25)
+# add coco wholeBody (COCO 25) joints' names
 COCO_KEYPOINTS = ['nose',
                   'left_eye',
                   'right_eye',
@@ -1373,7 +1380,7 @@ COCO_KEYPOINTS = ['nose',
                   ]
 COCO_KEYPOINTS+=FEET_KEYPS_NAMES
 
-
+'''the names of 3dpw joints'''
 THREEDPW_JOINTS = [
     'nose',
     'neck',
@@ -1524,7 +1531,7 @@ PANOPTIC_KEYPOINT_NAMES += (OPENPOSE_JOINTS[19:19 + 2 * 21] +
                             OPENPOSE_JOINTS[19 + 2 * 21 + 17:] +
                             OPENPOSE_JOINTS[19 + 2 * 21:19 + 2 * 21 + 17]
                             )
-
+'''the names of freihand(a hand dataset) joints'''
 FREIHAND_NAMES = [
     'right_wrist',
     'right_thumb1',
@@ -1616,6 +1623,7 @@ H36M_NAMES = [
 
 def body_model_to_dset(model_type='smplx', dset='coco', joints_to_ign=None,
                        use_face_contour=False, **kwargs):
+    '''return the mapping between the raw idxes of dset to the targeted idxes of model_type'''
     if joints_to_ign is None:
         joints_to_ign = []
 
@@ -1658,6 +1666,7 @@ def body_model_to_dset(model_type='smplx', dset='coco', joints_to_ign=None,
 
 def dset_to_body_model(model_type='smplx', dset='coco', joints_to_ign=None,
                        use_face_contour=False, **kwargs):
+    '''return the mapping between the raw idxes of model_type to the targeted idxes of dset'''
     if joints_to_ign is None:
         joints_to_ign = []
 

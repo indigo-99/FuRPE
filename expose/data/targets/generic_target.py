@@ -22,6 +22,9 @@ from loguru import logger
 
 
 class GenericTarget(ABC):
+    '''
+    an abstract father class for the other target classes
+    '''
     def __init__(self):
         super(GenericTarget, self).__init__()
         self.extra_fields = {}

@@ -21,13 +21,17 @@ from . import transforms as T
 
 
 def build_transforms(transf_cfg, is_train):
+    '''
+    build transform methods for datasets according to the config of transforms
+    '''
     if is_train:
         flip_prob = transf_cfg.get('flip_prob', 0)#0.5
-        downsample_dist = transf_cfg.get('downsample_dist', 'categorical')#categorical
+        downsample_dist = transf_cfg.get('downsample_dist', 'categorical')#categorical,  will randomly choose a value in downsample_cat_factors
+        #if set to be 'uniform', will randomly choose a value between downsample_factor_min and downsample_factor_max
         downsample_cat_factors = transf_cfg.get(
-            'downsample_cat_factors', (1.0, ))#1.0
+            'downsample_cat_factors', (1.0, ))#1.0  may be changed to (1,0,2,0,...,10,0)
         downsample_factor_min = transf_cfg.get('downsample_factor_min', 1.0)#1.0
-        downsample_factor_max = transf_cfg.get('downsample_factor_max', 1.0)#1.0
+        downsample_factor_max = transf_cfg.get('downsample_factor_max', 1.0)#1.0 
         scale_factor = transf_cfg.get('scale_factor', 0.0)#0.25
         scale_factor_min = transf_cfg.get('scale_factor_min', 0.0)#1.0
         scale_factor_max = transf_cfg.get('scale_factor_max', 0.0)#1.0
@@ -70,6 +74,7 @@ def build_transforms(transf_cfg, is_train):
         factor_min=downsample_factor_min,
         factor_max=downsample_factor_max)
 
+    # return a series of transformation methods, defined in .transform.py
     transform = T.Compose(
         [
             T.BBoxCenterJitter(center_jitter_factor, dist=center_jitter_dist),

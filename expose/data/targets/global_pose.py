@@ -29,7 +29,9 @@ FLIP_TOP_BOTTOM = 1
 
 
 class GlobalPose(GenericTarget):
-
+    '''
+    store the global pose
+    '''
     def __init__(self, global_pose, **kwargs):
         super(GlobalPose, self).__init__()
         self.global_pose = global_pose

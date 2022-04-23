@@ -35,6 +35,7 @@ from ...utils.transf_utils import crop, get_transform
 
 
 class Compose(object):
+    '''impose each one of transforms on the input images'''
     def __init__(self, transforms):
         self.transforms = transforms
         self.timers = {}
@@ -161,6 +162,7 @@ class BBoxCenterJitter(object):
 
 
 class SimulateLowRes(object):
+    '''simulate low resolution images (like crops of hands/head)'''
     def __init__(
         self,
         dist: str = 'categorical',
@@ -311,7 +313,8 @@ class RandomRotation(object):
         # perform the actual rotation and return the image
         rotated_image = cv2.warpAffine(image, M, (nW, nH))
 
-        new_target = target.rotate(rot=rot)
+        new_target = target.rotate(rot=rot) 
+        # designing several classes for each predicted parameters is intended to rotate targets together with images
 
         center = target.get_field('center')
         center = np.dot(M[:2, :2], center) + M[:2, 2]
@@ -338,6 +341,9 @@ class RandomRotation(object):
 
 
 class Crop(object):
+    '''
+    crop images and their corresponding targets according to configs (crop_size, scale_factor)
+    '''
     def __init__(self, is_train=True,
                  crop_size=224,
                  scale_factor_min=0.00,
@@ -424,6 +430,7 @@ class Crop(object):
 
 
 class ColorJitter(object):
+    '''not being used'''
     def __init__(self, brightness=0.0, contrast=0, saturation=0, hue=0):
         super(ColorJitter, self).__init__()
         self.brightness = brightness
@@ -463,6 +470,7 @@ class ToTensor(object):
 
 
 class Normalize(object):
+    '''normalize the images according to mean and std values set in config.yaml'''
     def __init__(self, mean, std):
         super(Normalize, self).__init__()
         self.mean = mean

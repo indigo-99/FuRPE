@@ -23,6 +23,10 @@ from expose.utils.typing_utils import Tensor
 
 
 class ImageList(object):
+    '''
+    a class for a list of images (training/testing full images)
+    NOT UNDERSTAND ITS NECESSITY
+    '''
     def __init__(self, images: torch.Tensor,
                  img_sizes: List[torch.Size],
                  padding=None):
@@ -137,6 +141,9 @@ class ImageListPacked(object):
 def to_image_list_concat(
         images: List[Tensor]
 ) -> ImageList:
+    '''
+    concat a list of images to a imageList object
+    '''
     if images is None:
         return images
     if isinstance(images, ImageList):

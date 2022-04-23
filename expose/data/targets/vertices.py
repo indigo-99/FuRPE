@@ -28,6 +28,7 @@ FLIP_TOP_BOTTOM = 1
 
 
 class Vertices(GenericTarget):
+    '''contains the vertices'''
     def __init__(self, vertices,
                  bc=None,
                  closest_faces=None,
