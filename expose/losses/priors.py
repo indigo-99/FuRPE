@@ -65,6 +65,8 @@ def build_prior(prior_type, rho=100, reduction='mean', size_average=True,
 
 
 class MeanPrior(nn.Module):
+    ''' Penalizes inputs to be close to the mean value
+    '''
     def __init__(self, mean=None, reduction='mean', **kwargs):
         super(MeanPrior, self).__init__()
         assert mean is not None, 'Request MeanPrior, but mean was not given!'
@@ -100,6 +102,8 @@ class IdentityPrior(nn.Module):
 
 
 class ThresholdPrior(nn.Module):
+    ''' Penalizes inputs to filter values greater than the margin/threshold
+    '''
     def __init__(self, reduction='mean', margin=1, norm='l2', epsilon=1e-7,
                  **kwargs):
         super(ThresholdPrior, self).__init__()
@@ -235,6 +239,8 @@ class BarrierPrior(nn.Module):
 
 
 class L1Prior(nn.Module):
+    ''' Penalizes inputs' L1 values not too huge
+    '''
     def __init__(self, dtype=torch.float32, reduction='mean', **kwargs):
         super(L1Prior, self).__init__()
         self.reduction = get_reduction_method(reduction)
@@ -244,6 +250,8 @@ class L1Prior(nn.Module):
 
 
 class L2Prior(nn.Module):
+    ''' Penalizes inputs' L2 values not too huge
+    '''
     def __init__(self, dtype=torch.float32, reduction='mean', **kwargs):
         super(L2Prior, self).__init__()
         self.reduction = get_reduction_method(reduction)
@@ -253,7 +261,8 @@ class L2Prior(nn.Module):
 
 
 class GMMPrior(nn.Module):
-
+    ''' Penalizes inputs according to GMMPrior saved in path (NOT UNDERSTAND)
+    '''
     def __init__(self, path,
                  num_gaussians=6, dtype=torch.float32, epsilon=1e-16,
                  reduction='mean',

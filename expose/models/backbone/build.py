@@ -6,6 +6,7 @@ from .hrnet import build as build_hr_net
 
 
 def build_backbone(backbone_cfg):
+    '''build the backbone for body/hand/head sub-network according to config.yaml'''
     backbone_type = backbone_cfg.get('type', 'resnet50')
     #  use_avgpool = cfg.get('network', {}).get('type') != 'attention'
     pretrained = backbone_cfg.pop('pretrained', True)

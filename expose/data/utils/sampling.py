@@ -21,6 +21,7 @@ from collections import defaultdict
 
 
 class EqualSampler(dutils.Sampler):
+    '''the sampler class to sample equal ratio of data with or without 2d keypoint labels'''
     def __init__(self, datasets, batch_size=1, ratio_2d=0.5, shuffle=False):
         super(EqualSampler, self).__init__(datasets)
         self.num_datasets = len(datasets)

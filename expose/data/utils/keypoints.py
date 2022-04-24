@@ -18,6 +18,9 @@ import numpy as np
 
 def read_keypoints(keypoint_fn, use_hands=True, use_face=True,
                    use_face_contour=True):
+    '''
+    read keypoints from files (not used now)
+    '''
     with open(keypoint_fn) as keypoint_file:
         data = json.load(keypoint_file)
 

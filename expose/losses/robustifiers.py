@@ -27,6 +27,9 @@ from loguru import logger
 
 
 def build_robustifier(robustifier_type: str = None, **kwargs) -> nn.Module:
+    '''
+    强化器，用于损失函数计算，x^2/(x^2+rho^2)，值相比于x^2/rho^2，不会出现无穷大
+    '''
     if robustifier_type is None or robustifier_type == 'none':
         return None
     elif robustifier_type == 'gmof':

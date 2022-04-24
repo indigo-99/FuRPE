@@ -19,6 +19,7 @@ DIM_FLIP_TENSOR = torch.tensor([1, -1, -1], dtype=torch.float32)
 
 
 def flip_pose(pose_vector, pose_format='aa'):
+    '''flip the pose vector in the form of axis angle or rotation matrix'''
     if pose_format == 'aa':
         if torch.is_tensor(pose_vector):
             dim_flip = DIM_FLIP_TENSOR

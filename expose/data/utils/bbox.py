@@ -26,7 +26,9 @@ from expose.utils.typing_utils import Tensor
 def points_to_bbox(
         points: Tensor,
         bbox_scale_factor: float = 1.0) -> Tuple[Tensor, Tensor]:
-
+    '''
+    compute bbox from the x and y coordinates of a tensor of points
+    '''
     min_coords, _ = torch.min(points, dim=1)
     xmin, ymin = min_coords[:, 0], min_coords[:, 1]
     max_coords, _ = torch.max(points, dim=1)
@@ -37,10 +39,6 @@ def points_to_bbox(
 
     width = (xmax - xmin)
     height = (ymax - ymin)
-    # logger.info('points xmin: {}',xmin)
-    # logger.info('points xmax: {}',xmax)
-    # logger.info('points ymin: {}',ymin)
-    # logger.info('points ymax: {}',ymax)
     # Convert the bounding box to a square box
     size = torch.max(width, height) * bbox_scale_factor
 
@@ -48,6 +46,9 @@ def points_to_bbox(
 
 
 def center_size_to_bbox(center: Tensor, size: Tensor) -> Tensor:
+    '''
+    compute the bbox from the center and size of the img
+    '''
     xmin = center[:, 0] - size * 0.5
     ymin = center[:, 1] - size * 0.5
 
@@ -59,6 +60,9 @@ def center_size_to_bbox(center: Tensor, size: Tensor) -> Tensor:
 
 def keyps_to_bbox(keypoints, conf, img_size=None, clip_to_img=False,
                   min_valid_keypoints=6, scale=1.0):
+    '''
+    compute bbox from the x and y coordinates of the keypoints
+    '''
     valid_keypoints = keypoints[conf > 0]
     if len(valid_keypoints) < min_valid_keypoints:
         logger.info('too few high-conf keypoints: {}',len(valid_keypoints))
@@ -93,6 +97,9 @@ def keyps_to_bbox(keypoints, conf, img_size=None, clip_to_img=False,
         return None
 
 def bbox_scale(bbox, img_size=None, clip_to_img=False, scale=1.0):
+    '''
+    compute the scaled bbox 
+    '''
     xmin = bbox[0]
     ymin = bbox[1]
     xmax = bbox[0]+bbox[2]
@@ -124,6 +131,9 @@ def bbox_scale(bbox, img_size=None, clip_to_img=False, scale=1.0):
 
 
 def bbox_to_center_scale(bbox, dset_scale_factor=1.0, ref_bbox_size=200):
+    '''
+    compute center and scale of images from the bbox
+    '''
     if bbox is None:
         return None, None, None
     bbox = bbox.reshape(-1)
@@ -141,6 +151,9 @@ def scale_to_bbox_size(scale, ref_bbox_size=200):
 
 
 def bbox_area(bbox):
+    '''
+    compute the area of a bbox 
+    '''
     if torch.is_tensor(bbox):
         if bbox is None:
             return 0.0
