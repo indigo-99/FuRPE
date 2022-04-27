@@ -4,7 +4,9 @@ import os
 import os.path as osp
 import shutil
 from tqdm import tqdm
-
+'''find data from curated_fittings and MPI training datasets who has hands detected by mediapipe,
+to train the model with continuous hand losses instead of intermittent ones 
+(finnally turned out to be USELESS)'''
 data_path='/data/panyuqing/expose_experts/data/curated_fits'
 
 # params3d_v_path='/data/panyuqing/expose_experts/data/params3d_v/curated_fit'

@@ -4,7 +4,8 @@ import os
 import os.path as osp
 import shutil
 from tqdm import tqdm
-
+'''Filter data after the first filter (according to keypoint conf),
+This time filtering out data whose keypoints number doesn't satisfy the belowing requirements to avoid error during training'''
 def check_kpt_conf(cont,min_valid_keypoints=6):
     if (len(cont['people'])>0) and (len(cont['people'][0]['pose_keypoints_2d'])==75):
         body_kp=np.array(cont['people'][0]['pose_keypoints_2d'])

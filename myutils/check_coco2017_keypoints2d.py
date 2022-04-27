@@ -2,6 +2,11 @@ import numpy as np
 import json
 import os
 import os.path as osp
+'''
+The order of 2d keypoints in the added COCO2017 dataset is different from the order defined by EXPOSE smplx.
+Get the relationship between the two orders and save as labels.
+The code is intended to check whether the relationship is right.
+'''
 
 img_dir='/data/panyuqing/expose_experts/add_data/coco2017/train/'
 img_name='000000229295'#'000000138248'#'000000229295'

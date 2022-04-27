@@ -3,7 +3,7 @@ import os
 import os.path as osp
 import shutil
 from tqdm import tqdm
-
+'''move the pseudo ground truth files from raw_dir to target dir'''
 param_dir='/data/panyuqing/expose_experts/data/curated_fits/params3d_v'
 allparams=os.listdir(param_dir)
 target_dir='/data/panyuqing/expose_experts/data/params3d_v'

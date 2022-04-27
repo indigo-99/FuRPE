@@ -6,7 +6,9 @@ import shutil
 from tqdm import tqdm
 
 from expose.data.targets.keypoints import dset_to_body_model, get_part_idxs
-
+'''Filter data after the first filter (according to keypoint conf),
+This time more strictly constraining the keypoints from raw 144 keypoints to the first 25 keypoints, 
+because these are body keypoints, to avoid an img with hands detected but no body (useless in training)'''
 # same as expose-master\expose\data\utils\bbox.py
 body_thresh=0.1
 hand_thresh=0.2

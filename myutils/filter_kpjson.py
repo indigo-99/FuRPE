@@ -2,7 +2,10 @@ import numpy as np
 import os
 import os.path as osp
 import json
-
+'''
+Filter out the images with few credible keypoints, and save deleted indexs among curated_fittings datasets to del_indexes_thresh12.npy
+The filtering threshold is defined in EXPOSE code to crop bbox according to keypoints. Fewer than the threshold will lead to cropping error.
+'''
 
 body_thresh=0.1
 hand_thresh=0.2

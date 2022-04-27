@@ -1685,12 +1685,12 @@ class SMPLXHead(nn.Module):
             losses['body_loss']=bdloss
 
             # add cropped keypoints loss for head/hand
-            head_crop_kpt_loss=self.head_crop_keyps_loss(input = out_params['head_proj_joints'], target = out_params['gt_head_keypoints'], weights =1.0)
+            head_crop_kpt_loss=self.head_crop_keyps_loss(input = out_params['head_proj_joints'], target = out_params['gt_head_keypoints'], weights = 0.005)
             losses['head_crop_kpt_loss']=head_crop_kpt_loss
 
-            left_hand_crop_kpt_loss=self.left_hand_crop_keyps_loss(input = out_params['left_hand_proj_joints'], target = out_params['gt_left_hand_keypoints'], weights =1.0)
+            left_hand_crop_kpt_loss=self.left_hand_crop_keyps_loss(input = out_params['left_hand_proj_joints'], target = out_params['gt_left_hand_keypoints'], weights = 0.005)
             losses['left_hand_crop_kpt_loss']=left_hand_crop_kpt_loss
-            right_hand_crop_kpt_loss=self.right_hand_crop_keyps_loss(input = out_params['right_hand_proj_joints'], target = out_params['gt_right_hand_keypoints'], weights =1.0)
+            right_hand_crop_kpt_loss=self.right_hand_crop_keyps_loss(input = out_params['right_hand_proj_joints'], target = out_params['gt_right_hand_keypoints'], weights = 0.005)
             losses['right_hand_crop_kpt_loss']=right_hand_crop_kpt_loss
             
 

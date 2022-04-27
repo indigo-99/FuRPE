@@ -141,7 +141,7 @@ class KeypointLoss(nn.Module):
                 diff = raw_diff.abs()
             elif self.norm_type == 'l2':
                 diff = raw_diff.pow(2)
-        weighted_diff = diff #* weights.unsqueeze(dim=-1)
+        weighted_diff = diff #* weights#.unsqueeze(dim=-1)
 
         return torch.sum(weighted_diff) / weighted_diff.shape[0]
         #  return torch.sum(weighted_diff) / (torch.sum(visibility) + epsilon)

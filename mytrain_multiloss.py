@@ -345,7 +345,7 @@ class ExTrainer(object):
             
             # add cropped keypoints loss
             if 'head_crop_kpt_loss' in out_losses:
-                loss += out_losses['head_crop_kpt_loss']
+                loss += 0.002 * out_losses['head_crop_kpt_loss']
 
             if ('expression_loss' in out_losses['body_loss']):
                 l_expression = out_losses['body_loss']['expression_loss']
@@ -387,9 +387,9 @@ class ExTrainer(object):
 
             # add cropped keypoints loss
             if 'left_hand_crop_kpt_loss' in out_losses:
-                loss += out_losses['left_hand_crop_kpt_loss']
+                loss += 0.002 * out_losses['left_hand_crop_kpt_loss']
             if 'right_hand_crop_kpt_loss' in out_losses:
-                loss += out_losses['right_hand_crop_kpt_loss']
+                loss += 0.002 * out_losses['right_hand_crop_kpt_loss']
 
             feature_left_hand_loss=None
             if 'left_hand_pose_loss' in out_losses['body_loss']:

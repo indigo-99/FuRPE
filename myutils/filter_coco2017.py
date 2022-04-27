@@ -6,6 +6,10 @@ import shutil
 from tqdm import tqdm
 
 from expose.data.targets.keypoints import dset_to_body_model, get_part_idxs
+'''
+The order of 2d keypoints in the added COCO2017 dataset is different from the order defined by EXPOSE smplx.
+Get the relationship between the two orders, filter out the images with few credible keypoints, and save as *_keypoints.json
+'''
 
 # same as expose-master\expose\data\utils\bbox.py
 body_thresh=0.1

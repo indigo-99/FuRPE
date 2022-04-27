@@ -61,6 +61,7 @@ def build_pose_regressor(input_dim: int,
                          mean_pose: np.array = None,
                          pca_basis: np.array = None,
                          append_params=True) -> Tuple[nn.Module, nn.Module]:
+    '''build the regressor with decoder and MLP for poses according to config.yaml'''
     pose_decoder = build_pose_decoder(
         pose_cfg, num_angles, mean_pose=mean_pose,
         pca_basis=pca_basis)

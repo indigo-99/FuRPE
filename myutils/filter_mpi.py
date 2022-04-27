@@ -4,6 +4,10 @@ import os
 import os.path as osp
 import shutil
 from tqdm import tqdm
+'''
+Filter out the images with few credible keypoints, and copy the valie images' keypoints of MPI/3DPW datasets to the target_dir.
+The filtering threshold is defined in EXPOSE code to crop bbox according to keypoints. Fewer than the threshold will lead to cropping error.
+'''
 
 body_thresh=0.1
 hand_thresh=0.2
