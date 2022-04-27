@@ -29,6 +29,7 @@ from ...data.targets.keypoints import (
 
 
 class KeypointLoss(nn.Module):
+    '''the class for losses of keypoints'''
     def __init__(self, exp_cfg):
         super(KeypointLoss, self).__init__()
         self.left_hip_idx = KEYPOINT_NAMES.index('left_hip')
@@ -178,6 +179,15 @@ class KeypointLoss(nn.Module):
                 iteration >= self.face_edge_2d_enable_at)
 
     def forward(self, proj_joints, joints3d, targets, device=None):
+        '''
+        input:
+            proj_joints: the projected 2d keypoints predicted by the model
+            joints3d: the 3d joints predicted by the model
+            targets: the ground truth labels of input images
+            device: where the tensors are located
+        output:
+            a dict of keypoint losses whose keys are loss_name set in config.yaml
+        '''
         if device is None:
             device = torch.device('cpu')
 

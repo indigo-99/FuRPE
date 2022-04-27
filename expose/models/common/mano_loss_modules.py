@@ -46,6 +46,7 @@ PARAM_KEYS = ['hand_pose',
 
 class MANOLossModule(nn.Module):
     '''
+    the class for the losses of MANO model (only used in hand specific training, see in: mytrain_hand.py)
     '''
 
     def __init__(self, loss_cfg):
@@ -216,6 +217,14 @@ class MANOLossModule(nn.Module):
     def forward(self, input_dict,
                 hand_targets,
                 device=None):
+        '''
+        input:
+            input_dict: the predicted parameters by the model
+            hand_targets: the ground truth labels of input images
+            device: where the tensors are located
+        output:
+            a dict of keypoint losses whose keys are loss_name set in config.yaml
+        '''
         if device is None:
             device = torch.device('cpu')
 

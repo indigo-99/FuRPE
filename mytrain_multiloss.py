@@ -48,15 +48,15 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))
 # feature_distil: add feature loss during training computed by KLDivLoss, 
 # using MLP_feat class to get the same dimensions 
 use_hand_feature_distil=False
-use_face_feature_distil=True
-use_body_feature_distil=True
+use_face_feature_distil=False#True
+use_body_feature_distil=False#True
 
 # whether to freeze a sub-network(body/face/hand) or not
 # when you don't want to change the parameters of a sub-network, set freeze to be True
 # the loss will not be counted on to the total loss or backwarded.
 freeze_body=False
 freeze_face=False
-freeze_hand=True
+freeze_hand=False # True
 
 
 class MLP_feat(nn.Module):
@@ -343,6 +343,10 @@ class ExTrainer(object):
             face_joints_2d_loss = torch.sum(self.precisions[2].data * f_joints_2d_loss + self.train_loss_weight_list[2].data, -1)
             loss += face_joints_2d_loss
             
+            # add cropped keypoints loss
+            if 'head_crop_kpt_loss' in out_losses:
+                loss += out_losses['head_crop_kpt_loss']
+
             if ('expression_loss' in out_losses['body_loss']):
                 l_expression = out_losses['body_loss']['expression_loss']
                 loss_expression = torch.sum(self.precisions[2].data * l_expression + self.train_loss_weight_list[2].data, -1)
@@ -380,6 +384,12 @@ class ExTrainer(object):
             h_joints_2d_loss = 2*out_losses['keypoint_loss']['hand_joints_2d_loss']
             hand_joints_2d_loss = torch.sum(self.precisions[1].data * h_joints_2d_loss + self.train_loss_weight_list[1].data, -1)
             loss += hand_joints_2d_loss
+
+            # add cropped keypoints loss
+            if 'left_hand_crop_kpt_loss' in out_losses:
+                loss += out_losses['left_hand_crop_kpt_loss']
+            if 'right_hand_crop_kpt_loss' in out_losses:
+                loss += out_losses['right_hand_crop_kpt_loss']
 
             feature_left_hand_loss=None
             if 'left_hand_pose_loss' in out_losses['body_loss']:
@@ -451,11 +461,16 @@ class ExTrainer(object):
                 losses['loss_lh_pose'] = loss_lh_pose.detach().item()
                 if feature_left_hand_loss is not None:
                     losses['feature_left_hand_loss'] = feature_left_hand_loss.detach().item()
+                if 'left_hand_crop_kpt_loss' in out_losses:
+                    losses['left_hand_crop_kpt_loss'] = out_losses['left_hand_crop_kpt_loss'].detach().item()
+                
             
             if 'right_hand_pose_loss' in out_losses['body_loss']:
                 losses['loss_rh_pose'] = loss_rh_pose.detach().item()
                 if feature_right_hand_loss is not None:
                     losses['feature_right_hand_loss'] = feature_right_hand_loss.detach().item()
+                if 'right_hand_crop_kpt_loss' in out_losses:
+                    losses['right_hand_crop_kpt_loss'] = out_losses['right_hand_crop_kpt_loss'].detach().item()
             
         if not freeze_body:
             losses['body_joints_2d_loss'] = loss_bd_2dkpt.detach().item()
@@ -464,6 +479,7 @@ class ExTrainer(object):
                 losses['body_joints_3d_loss'] = out_losses['keypoint_loss']['body_joints_3d_loss'].detach().item()
             if use_body_feature_distil:
                 losses['feature_body_loss'] = feature_body_loss.detach().item()    
+            
 
         if 'global_orient_loss' in out_losses['body_loss']:
             losses['loss_global_orient'] = loss_global_orient.detach().item()
@@ -478,7 +494,11 @@ class ExTrainer(object):
                 losses['loss_expression'] = loss_expression.detach().item()
             if 'face_joints_3d_loss' in out_losses['keypoint_loss']:
                 losses['face_joints_3d_loss'] = out_losses['keypoint_loss']['face_joints_3d_loss'].detach().item()
-        
+            
+            if 'head_crop_kpt_loss' in out_losses:
+                    losses['head_crop_kpt_loss'] = out_losses['head_crop_kpt_loss'].detach().item()
+
+
         logger.info('losses: {}',losses)
         
         return out_params, losses

@@ -92,6 +92,7 @@ LEFT_FINGER = [name.replace('right', 'left') for name in RIGHT_FINGER]
 
 
 def blend_images(img1, img2, alpha=0.7):
+    '''transparency of img1 with img2'''
     return img1 * alpha + (1 - alpha) * img2
 
 
@@ -129,6 +130,7 @@ def create_skel_img(img, keypoints, connections, valid=None,
                     marker_size=2, linewidth=2, draw_skel=True,
                     draw_text=True,
                     ):
+    '''create skeleton of keypoints for the img'''
     kp_mask = np.copy(img)
     if valid is None:
         valid = np.ones([keypoints.shape[0]])
@@ -191,6 +193,7 @@ def create_skel_img(img, keypoints, connections, valid=None,
 
 def create_bbox_img(img, bounding_box, color=(0.0, 0.0, 0.0),
                     linewidth=2):
+    '''draw bbox on the img'''
     bbox_img = img.copy()
     xmin, ymin, xmax, ymax = bounding_box.reshape(4)
 
@@ -258,6 +261,7 @@ class OpenCVCamera(pyrender.Camera):
 
 
 class Renderer(object):
+    '''the class for renderer used in visualization'''
     def __init__(self, near=0.1, far=200, width=224, height=224,
                  bg_color=(0.0, 0.0, 0.0, 0.0), ambient_light=None,
                  use_raymond_lighting=True,
@@ -574,6 +578,7 @@ class SMPLifyXRenderer(AbstractRenderer):
 
 
 class OverlayRenderer(AbstractRenderer):
+    '''the renderer with meshes overlayed on the raw imgs'''
     def __init__(self, faces=None, img_size=224, tex_size=1):
         super(OverlayRenderer, self).__init__(faces=faces, img_size=img_size)
 
@@ -665,6 +670,7 @@ class OverlayRenderer(AbstractRenderer):
 
 
 class GTRenderer(AbstractRenderer):
+    '''the class for the render of the ground truth mesh (problem: no camera ground truth so the results maybe all black) '''
     def __init__(self, faces=None, img_size=224):
         super(GTRenderer, self).__init__(faces=faces, img_size=img_size)
 

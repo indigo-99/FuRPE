@@ -259,6 +259,7 @@ class MLP(nn.Module):
 
 
 class IterativeRegression(nn.Module):
+    '''iterative regression with num_stages stages, to learn the delta of ground truth and predicted mean_params (i.e. condition)'''
     def __init__(self, module, mean_param, num_stages=1,
                  append_params=True, learn_mean=False,
                  detach_mean=False, dim=1,
@@ -325,20 +326,20 @@ class IterativeRegression(nn.Module):
         if self.append_params:
             assert features is not None, (
                 'Features are none even though append_params is True')
-
+            '''the model input contains the features and raw outputs (i.e. cond)'''
             module_input = torch.cat([
                 module_input,
                 cond],
                 dim=self.dim)
         deltas.append(self.module(module_input))
         num_params = deltas[-1].shape[1]
-        parameters.append(cond[:, :num_params].clone() + deltas[-1])
+        parameters.append(cond[:, :num_params].clone() + deltas[-1]) # add the updated params
 
         for stage_idx in range(1, self.num_stages):
             module_input = torch.cat(
                 [features, parameters[stage_idx - 1]], dim=-1)
             params_upd = self.module(module_input)
-            deltas.append(params_upd)
-            parameters.append(parameters[stage_idx - 1] + params_upd)
+            deltas.append(params_upd) 
+            parameters.append(parameters[stage_idx - 1] + params_upd) # add the updated params
 
         return parameters, deltas

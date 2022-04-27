@@ -72,6 +72,7 @@ def transform(pt, center, scale, res, invert=0, rot=0):
 
 
 def crop(img, center, scale, res, rot=0, dtype=np.float32):
+    '''crop the img according to given center, scale, res and rotation angle'''
     # res=crop_size:[256,256]
     # Upper left point
     ul = np.array(transform([1, 1], center, scale, res, invert=1)) - 1 
@@ -109,29 +110,7 @@ def crop(img, center, scale, res, rot=0, dtype=np.float32):
     # left x should>=0, right x should <= img.shape[0]
     old_x = max(0, ul[0]), min(len(img[0]), br[0]) #max(0,709),min(640,918)
     old_y = max(0, ul[1]), min(len(img), br[1]) #max(0,427),min(480,636)
-    #p add: find empty error
-    #if (old_x[0]>=old_x[1]) or (old_y[0]>=old_y[1]):
-        # print('old_x: ',old_x)
-        # print('old_y: ',old_y)
-    #if (new_x[0]>=new_x[1]) or (new_y[0]>=new_y[1]):
-        # print('new_x: ',new_x)
-        # print('new_y: ',new_y)
-    if (new_y[1]-new_y[0]) != (old_y[1]-old_y[0]):
-        print('new_y: ',new_y)
-        print('old_y: ',old_y)
-        print('upper left: ',ul)
-        print('bottom right: ',br)
-        print('center: ',center)
-        print('scale: ',scale)
-        print('img shape: ',len(img),' ',len(img[0]))
-    if (new_x[1]-new_x[0]) != (old_x[1]-old_x[0]):
-        print('new_x: ',new_x)
-        print('old_x: ',old_x)
-        print('upper left: ',ul)
-        print('bottom right: ',br)
-        print('center: ',center)
-        print('scale: ',scale)
-        print('img shape: ',len(img),' ',len(img[0]))
+
     # Range to sample from original image
     new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]] = img[old_y[0]:old_y[1], old_x[0]:old_x[1]]
 

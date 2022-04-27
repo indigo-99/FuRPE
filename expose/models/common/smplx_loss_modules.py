@@ -39,8 +39,7 @@ PARAM_KEYS = ['betas', 'expression', 'global_pose', 'body_pose', 'hand_pose',
 
 
 class SMPLXLossModule(nn.Module):
-    '''
-    '''
+    '''the class for losses of smplx'''
 
     def __init__(self, loss_cfg, num_stages=3,
                  use_face_contour=False):
@@ -169,6 +168,7 @@ class SMPLXLossModule(nn.Module):
                          keyp_confs=None,
                          penalize_only_parts=False,
                          ):
+        '''compute smplx losses between the predicted parameters and target labels according to config.yaml'''
         losses = defaultdict(
             lambda: torch.tensor(0, device=device, dtype=torch.float32))
 
@@ -311,6 +311,15 @@ class SMPLXLossModule(nn.Module):
         return losses
 
     def forward(self, network_params, targets, num_stages=3, device=None):
+        '''
+        input:
+            network_params: the predicted parameters by the model
+            targets: the ground truth labels of input images
+            num_stages: the num of regression stages of the model (set in config.yaml, to be 3)
+            device: where the tensors are located
+        output:
+            a dict of smplx losses whose keys are loss_name set in config.yaml
+        '''
         if device is None:
             device = torch.device('cpu')
 
@@ -427,6 +436,7 @@ class SMPLXLossModule(nn.Module):
         '''
         #network_params['']
         output_losses = {}
+        '''compute the loss of each stage in the raw code, now only use the last stage's final output'''
         #for n in range(1, len(network_params) + 1):
             #if n not in stages_to_penalize:
                 #continue
@@ -447,6 +457,7 @@ class SMPLXLossModule(nn.Module):
 
 
 class RegularizerModule(nn.Module):
+    '''the class for regularizer of losses (NOT BEING USED)'''
     def __init__(self, loss_cfg,
                  body_pose_mean=None, left_hand_pose_mean=None,
                  right_hand_pose_mean=None, jaw_pose_mean=None):
@@ -541,6 +552,7 @@ class RegularizerModule(nn.Module):
     def single_regularization_step(self, parameters,
                                    penalize_only_parts=False,
                                    **kwargs):
+        '''compute the regularization for prior losses set in config.yaml, only shape's weight>0'''
         prior_losses = {}
 
         betas = parameters.get('betas', None)
@@ -597,7 +609,7 @@ class RegularizerModule(nn.Module):
 
         prior_losses = defaultdict(lambda: 0)
         for n in range(1, num_stages + 1):
-            if n not in self.stages_to_regularize:
+            if n not in self.stages_to_regularize: # only regularize the last stage (final output)
                 continue
             curr_params = param_list[n - 1]
             if curr_params is None:

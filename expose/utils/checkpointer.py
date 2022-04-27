@@ -25,6 +25,7 @@ from loguru import logger
 
 
 class Checkpointer(object):
+    '''the class for the checkpointer of the model'''
     def __init__(self, model, optimizer=None, scheduler=None,
                  adv_optimizer=None,
                  pretrained='',
@@ -46,6 +47,7 @@ class Checkpointer(object):
         self.pretrained = pretrained
 
     def save_checkpoint(self, name, **kwargs):
+        '''save the current network's parameters to a checkpoint'''
         if self.rank > 0:
             return
         ckpt_data = {}
@@ -69,32 +71,9 @@ class Checkpointer(object):
         with open(osp.join(self.save_dir, 'latest_checkpoint'), 'w') as f:
             f.write(curr_ckpt_fn)
         ckpt_data.clear()
-    
-    def save_pixie_checkpoint(self, name, **kwargs):
-        if self.rank > 0:
-            return
-        ckpt_data = {'models': self.model.model_dict}
-
-        if self.optimizer is not None:
-            logger.info('Adding optimizer state ...')
-            ckpt_data['optimizer'] = self.optimizer.state_dict()
-        if self.scheduler is not None:
-            logger.info('Adding scheduler state ...')
-            ckpt_data['scheduler'] = self.scheduler.state_dict()
-        if self.adv_optimizer is not None:
-            logger.info('Adding discriminator optimizer state ...')
-            ckpt_data['adv_optimizer'] = self.adv_optimizer.state_dict()
-
-        ckpt_data.update(kwargs)
-
-        curr_ckpt_fn = osp.join(self.save_dir, name+'.tar')
-        logger.info('Saving checkpoint to {}'.format(curr_ckpt_fn))
-        torch.save(ckpt_data, curr_ckpt_fn)
-        with open(osp.join(self.save_dir, 'latest_checkpoint'), 'w') as f:
-            f.write(curr_ckpt_fn)
-        ckpt_data.clear()
 
     def load_checkpoint(self):
+        '''load the network's parameters '''
         save_fn = osp.join(self.save_dir, 'latest_checkpoint')
 
         load_pretrained = False
@@ -136,12 +115,12 @@ class Checkpointer(object):
             if 'smplx.smplx_loss.right_hand_idxs' in ckpt_data['model']:
                 del ckpt_data['model']['smplx.smplx_loss.right_hand_idxs']
         
-        #p add if not load expose's hand network weight
+        #add if not load expose's hand network weight
         hand_key=[key for key in ckpt_data['model'] if 'smplx.hand_predictor.backbone' in key or 'smplx.hand_predictor.regressor' in key]
         for hk in hand_key:
             del ckpt_data['model'][hk] 
         
-        #p add for test 3dpw not use_face_contour
+        #add for test, because 3dpw testset not use_face_contour
         if 'smplx.keyp_loss.face_idxs' in ckpt_data['model']:
             del ckpt_data['model']['smplx.keyp_loss.face_idxs']
         if 'smplx.body_loss.face_idxs' in ckpt_data['model']:
@@ -187,6 +166,7 @@ class Checkpointer(object):
         return ckpt_data
     
     def copy_state_dict(self, cur_state_dict, pre_state_dict, prefix='', load_name=None):
+        '''copy the state dict of the previous one to the current one'''
         def _get_params(key):
             key = prefix + key
             if key in pre_state_dict:
@@ -205,8 +185,37 @@ class Checkpointer(object):
             except:
                 logger.info('copy param {} failed',k)
                 continue
+    
+    
+    def save_pixie_checkpoint(self, name, **kwargs):
+        '''save the current PIXIE network's parameters to a checkpoint, recalled by pixie_train.py
+        not used in EXPOSE training'''
+        if self.rank > 0:
+            return
+        ckpt_data = {'models': self.model.model_dict}
+
+        if self.optimizer is not None:
+            logger.info('Adding optimizer state ...')
+            ckpt_data['optimizer'] = self.optimizer.state_dict()
+        if self.scheduler is not None:
+            logger.info('Adding scheduler state ...')
+            ckpt_data['scheduler'] = self.scheduler.state_dict()
+        if self.adv_optimizer is not None:
+            logger.info('Adding discriminator optimizer state ...')
+            ckpt_data['adv_optimizer'] = self.adv_optimizer.state_dict()
+
+        ckpt_data.update(kwargs)
+
+        curr_ckpt_fn = osp.join(self.save_dir, name+'.tar')
+        logger.info('Saving checkpoint to {}'.format(curr_ckpt_fn))
+        torch.save(ckpt_data, curr_ckpt_fn)
+        with open(osp.join(self.save_dir, 'latest_checkpoint'), 'w') as f:
+            f.write(curr_ckpt_fn)
+        ckpt_data.clear()
+
 
     def load_pixie_checkpoint(self):
+        '''load the checkpoints of PIXIE, recalled only in pixie_train/test.py, not in EXPOSE'''
         save_fn = osp.join(self.save_dir, 'latest_checkpoint')
 
         load_pretrained = False

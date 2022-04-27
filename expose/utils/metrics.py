@@ -35,6 +35,7 @@ class NoAligment(object):
 
 
 class ProcrustesAlignment(object):
+    '''the class for joint alignment to compute the metrics'''
     def __init__(self):
         super(ProcrustesAlignment, self).__init__()
 
@@ -171,6 +172,7 @@ class ScaleAlignment(object):
 
 
 class RootAlignmentMPJPE(object):
+    '''alignment by the root point'''
     def __init__(self, root=0, fscore_thresholds=None):
         super(RootAlignmentMPJPE, self).__init__()
         self.root = root
@@ -199,6 +201,7 @@ class RootAlignmentMPJPE(object):
 
 
 class PelvisAlignment(object):
+    '''alignment by the hips points'''
     def __init__(self, hips_idxs=None):
         super(PelvisAlignment, self).__init__()
         if hips_idxs is None:
@@ -268,6 +271,12 @@ def mpjpe(input_joints, target_joints):
 
 
 def vertex_to_vertex_error(input_vertices, target_vertices):
+    ''' Calculate mean vertice-to-vertice error
+        input:
+            input_vertices: The vertices predicted by the model
+            target_vertices: The ground truth vertices
+        output: The vertice-to-vertice error for each element in the batch
+    '''
     return np.sqrt(np.power(input_vertices - target_vertices, 2).sum(axis=-1))
 
 
@@ -275,6 +284,7 @@ def point_fscore(
         pred: torch.Tensor,
         gt: torch.Tensor,
         thresh: float) -> Dict[str, float]:
+    '''compute the point fscore (whose predicted to ground_truth distance is smaller than the given thresh)'''
     if torch.is_tensor(pred):
         pred = pred.detach().cpu().numpy()
     if torch.is_tensor(gt):

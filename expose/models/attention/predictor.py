@@ -1683,6 +1683,17 @@ class SMPLXHead(nn.Module):
             bdloss=self.body_loss(network_params=out_params,targets=targets) 
             losses['keypoint_loss']=kploss
             losses['body_loss']=bdloss
+
+            # add cropped keypoints loss for head/hand
+            head_crop_kpt_loss=self.head_crop_keyps_loss(input = out_params['head_proj_joints'], target = out_params['gt_head_keypoints'], weights =1.0)
+            losses['head_crop_kpt_loss']=head_crop_kpt_loss
+
+            left_hand_crop_kpt_loss=self.left_hand_crop_keyps_loss(input = out_params['left_hand_proj_joints'], target = out_params['gt_left_hand_keypoints'], weights =1.0)
+            losses['left_hand_crop_kpt_loss']=left_hand_crop_kpt_loss
+            right_hand_crop_kpt_loss=self.right_hand_crop_keyps_loss(input = out_params['right_hand_proj_joints'], target = out_params['gt_right_hand_keypoints'], weights =1.0)
+            losses['right_hand_crop_kpt_loss']=right_hand_crop_kpt_loss
+            
+
             # add feature of 3 networks for feature distiling during training
             feats={'body_feat':body_features,'face_feat':head_features,'left_hand_feat':left_hand_features, 'right_hand_feat':right_hand_features}
             output = {

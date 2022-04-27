@@ -33,6 +33,7 @@ def to_np(array, dtype=np.float32):
 
 
 def np2o3d_pcl(x: np.ndarray) -> o3d.geometry.PointCloud:
+    '''translate the 3d points in the form of numpy to the form of open3d geometry'''
     pcl = o3d.geometry.PointCloud()
     pcl.points = o3d.utility.Vector3dVector(x)
 

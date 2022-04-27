@@ -122,9 +122,12 @@ class KeypointLoss(nn.Module):
     def forward(self, input, target, weights=None, epsilon=1e-9):
         assert weights is not None
         keyp_dim = input.shape[-1]
+        #logger.info('input shape: {}',input.shape) # [28,36/44/68/144,2]
+        #logger.info('target shape: {}',target.shape)# [28,36/44/68/144,2]
 
-        if self.binarize:
-            weights = weights.gt(0).to(dtype=input.dtype)
+
+        #if self.binarize:
+            #weights = weights.gt(0).to(dtype=input.dtype)
 
         raw_diff = input - target
         # Should be B
@@ -138,7 +141,7 @@ class KeypointLoss(nn.Module):
                 diff = raw_diff.abs()
             elif self.norm_type == 'l2':
                 diff = raw_diff.pow(2)
-        weighted_diff = diff * weights.unsqueeze(dim=-1)
+        weighted_diff = diff #* weights.unsqueeze(dim=-1)
 
         return torch.sum(weighted_diff) / weighted_diff.shape[0]
         #  return torch.sum(weighted_diff) / (torch.sum(visibility) + epsilon)

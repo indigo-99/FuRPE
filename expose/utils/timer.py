@@ -22,6 +22,7 @@ from loguru import logger
 
 
 class Timer(object):
+    '''the class to record the time'''
     def __init__(self, name='', sync=False):
         super(Timer, self).__init__()
         self.elapsed = []

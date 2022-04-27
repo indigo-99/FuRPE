@@ -39,6 +39,7 @@ class ToCrops(nn.Module):
         scale_factor: float = 1.0,
         crop_size: int = 256
     ) -> Dict[str, Tensor]:
+        '''return cropped body images from full_images according to points and other configurations'''
         num_imgs, _, H, W = full_imgs.shape
         device = points.device
         dtype = points.dtype

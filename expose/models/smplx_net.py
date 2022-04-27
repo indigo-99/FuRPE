@@ -28,7 +28,7 @@ from .attention import build_attention_head
 
 
 class SMPLXNet(nn.Module):
-
+    '''the network of the whole motion-capture model, with details defined in attention/predictor.py'''
     def __init__(self, exp_cfg):
         super(SMPLXNet, self).__init__()
 
@@ -66,12 +66,9 @@ class SMPLXNet(nn.Module):
         if device is None:
             device = torch.device('cpu')
 
-        losses = {}
-
         output = self.smplx(images, targets=targets,
                             hand_imgs=hand_imgs, hand_targets=hand_targets,
                             head_imgs=head_imgs, head_targets=head_targets,
                             full_imgs=full_imgs)
 
-        #output['losses'] = losses
         return output

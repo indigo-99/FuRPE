@@ -10,6 +10,7 @@ def init_weights(layer,
                  init_type='xavier', distr='uniform',
                  gain=1.0,
                  activ_type='leaky-relu', lrelu_slope=0.2, **kwargs):
+    '''initialize the weights of the given network layer'''
     if len(name) < 1:
         name = str(layer)
     logger.debug('Initializing {} with {}_{}: gain={}', name, init_type, distr,

@@ -28,6 +28,15 @@ def build_optimizer(
     optim_cfg: Dict,
     exclude: str = '',
 ) -> optim.Optimizer:
+    '''
+    build optimizer for training the model.
+    input:
+        model: under training
+        optim_cfg: set in config.yaml
+        exclude: parameters' name who are excluded from gradient descenting
+    output:
+        optimizer
+    '''
     params = []
     hand_model_params = model.get_hand_model().named_parameters()
 
@@ -76,6 +85,14 @@ def build_scheduler(
         optimizer: optim.Optimizer,
         sched_cfg: Dict
 ) -> optim.lr_scheduler._LRScheduler:
+    '''
+    build a scheduler for the training optimizer.
+    input:
+        optimizer: training optimizer
+        sched_cfg: set in config.yaml
+    output:
+        scheduler
+    '''
     scheduler_type = sched_cfg.type
     if scheduler_type == 'none':
         return None

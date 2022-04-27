@@ -38,6 +38,7 @@ PARAM_KEYS = ['betas', 'expression', 'global_orient', 'jaw_pose']
 
 class FLAMELossModule(nn.Module):
     '''
+    the class for the losses of FLAME model (only used in head specific training, NOT BEING USED)
     '''
 
     def __init__(self, loss_cfg, use_face_contour=False):
@@ -223,6 +224,14 @@ class FLAMELossModule(nn.Module):
     def forward(self, input_dict,
                 head_targets,
                 device=None):
+        '''
+        input:
+            input_dict: the predicted parameters by the model
+            head_targets: the ground truth labels of input images
+            device: where the tensors are located
+        output:
+            a dict of keypoint losses whose keys are loss_name set in config.yaml
+        '''
         if device is None:
             device = torch.device('cpu')
 
