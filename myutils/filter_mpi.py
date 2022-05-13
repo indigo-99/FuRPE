@@ -4,6 +4,7 @@ import os
 import os.path as osp
 import shutil
 from tqdm import tqdm
+from loguru import logger
 '''
 Filter out the images with few credible keypoints, and copy the valie images' keypoints of MPI/3DPW datasets to the target_dir.
 The filtering threshold is defined in EXPOSE code to crop bbox according to keypoints. Fewer than the threshold will lead to cropping error.
@@ -14,7 +15,7 @@ hand_thresh=0.2
 face_thresh=0.4
 min_valid_keypoints=12
 
-def check_kpt_conf(kpt_json_path):
+def check_kpt_conf(jname):
     try:
         cont=json.load(open(jname,encoding='utf-8'))   
     except Exception:
@@ -67,7 +68,7 @@ def check_kpt_conf(kpt_json_path):
     else:
         return False
 
-dset='3dpw'#'mpi'
+dset='h36m'#'3dpw'#'mpi'
 if dset=='mpi':
     indexes=[0,1,2,4,5,6,7,8]#S1:[1,2,4,5,6,7,8]
     S_num='S6'#['S2','S3','S4','S5','S6','S7','S8']
@@ -89,6 +90,15 @@ elif dset=='3dpw':
         'courtyard_golf_00', 'outdoors_freestyle_00', 'courtyard_goodNews_00',
         'outdoors_slalom_00', 'courtyard_jacket_00', 'outdoors_slalom_01',
     ]
+elif dset=='h36m':
+    S_num='S1'#['S1','S5','S6','S7','S8','S9','S11']
+    dataset_pre='/data/panyuqing/expose_traindata/h36m/'
+    raw_images_dir=dataset_pre+'images/'+S_num
+    raw_keypoints_dir=dataset_pre+'keypoints2d_openpose/'+S_num+'_kpt'
+    target_dir='/data/panyuqing/expose_traindata/h36m/images_keypoints2d_filter/'+S_num
+    #logger.info('raw_images_dir: {}',raw_images_dir)
+    #logger.info('raw_keypoints_dir: {}',raw_keypoints_dir)
+
 
 os.makedirs(target_dir,exist_ok=True)
 kpt_dir=target_dir + '/keypoints2d/'
@@ -117,7 +127,17 @@ elif dset=='3dpw':
             if (osp.exists(jname) and check_kpt_conf(jname)):
                 shutil.copyfile(jname, kpt_dir+t_d+'_'+pic_name+'_keypoints.json')
                 shutil.copyfile(pf , img_dir+t_d+'_'+pic_name+'.jpg' )
-
+elif dset=='h36m':
+    pic_files=os.listdir(raw_images_dir)
+    for pf in tqdm(pic_files):
+        pf_path=osp.join(raw_images_dir,pf)
+        pic_name=pf.split('/')[-1].strip('.jpg') # S1_Directions_1.54138969_000001.jpg
+        jname=osp.join(raw_keypoints_dir,pic_name+'_keypoints.json') # S1_Directions_1.54138969_000001_keypoints.json
+        #logger.info('pic_name: {}',pic_name)
+        #logger.info('jname: {}',jname)
+        if (osp.exists(jname) and check_kpt_conf(jname)):
+            shutil.copyfile(jname, kpt_dir+pic_name+'_keypoints.json') 
+            shutil.copyfile(pf_path , img_dir+pic_name+'.jpg' )
 
 
 '''print(len(a))

@@ -57,11 +57,11 @@ if __name__ == '__main__':
 
     _C.body_model = CN()
 
-    _C.body_model.j14_regressor_path = '/data/panyuqing/expose_experts/data/SMPLX_to_J14.pkl'
-    _C.body_model.mean_pose_path = '/data/panyuqing/expose_experts/data/all_means.pkl'
-    _C.body_model.shape_mean_path = '/data/panyuqing/expose_experts/data/shape_mean.npy'
+    _C.body_model.j14_regressor_path = '/data1/panyuqing/expose_experts/data/SMPLX_to_J14.pkl'
+    _C.body_model.mean_pose_path = '/data1/panyuqing/expose_experts/data/all_means.pkl'
+    _C.body_model.shape_mean_path = '/data1/panyuqing/expose_experts/data/shape_mean.npy'
     _C.body_model.type = 'smplx'
-    _C.body_model.model_folder = '/data/panyuqing/expose_experts/data/models'
+    _C.body_model.model_folder = '/data1/panyuqing/expose_experts/data/models'
     _C.body_model.use_compressed = True
     _C.body_model.gender = 'neutral'
     _C.body_model.num_betas = 10
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     _C.body_model.jaw_pose = CN()
     _C.body_model.jaw_pose.param_type = 'cont_rot_repr'
     _C.body_model.jaw_pose.data_fn = 'clusters.pkl'
-    model_path='/data/panyuqing/expose_experts/data/models'
+    model_path='/data1/panyuqing/expose_experts/data/models'
     model_type='smplx'
     body_model_cfg=_C.get('body_model', {})
     body_model = build_body_model(
@@ -104,9 +104,9 @@ if __name__ == '__main__':
         dtype=torch.float32,
         **body_model_cfg)
 
-    data_path='/data/panyuqing/expose_experts/data/curated_fits'
-    save_3dparam_vertices_dir='/data/panyuqing/expose_experts/data/params3d_v'
-    #new_save_3dparam_vertices_dir='/data/panyuqing/expose_experts/data/params3d_v_newmh'
+    data_path='/data1/panyuqing/expose_experts/data/curated_fits'
+    save_3dparam_vertices_dir='/data1/panyuqing/expose_experts/data/params3d_v'
+    #new_save_3dparam_vertices_dir='/data1/panyuqing/expose_experts/data/params3d_v_newmh'
     #os.makedirs(new_save_3dparam_vertices_dir, exist_ok=True)
     #*********************************************
     #dset='cf_mpi_s1'
@@ -118,22 +118,26 @@ if __name__ == '__main__':
     # os.makedirs(new_save_3dparam_vertices_dir+'/curated_fits', exist_ok=True)
     # os.makedirs(new_save_3dparam_vertices_dir+'/coco2017', exist_ok=True)
     # os.makedirs(new_save_3dparam_vertices_dir+'/3dpw_train', exist_ok=True)
-    dset_list=['coco2017']#['3dpw_train', 'mpi_S2_Seq2', 'mpi_S3_Seq2', 'mpi_S4_Seq2', 'mpi_S5_Seq2', 'mpi_S6_Seq2', 'mpi_S7_Seq2', 'mpi_S8_Seq2','cf_mpi_s1']
+    dset_list=['h36m_S1']#['coco2017', '3dpw_train', 'mpi_S2_Seq2', 'mpi_S3_Seq2', 'mpi_S4_Seq2', 'mpi_S5_Seq2', 'mpi_S6_Seq2', 'mpi_S7_Seq2', 'mpi_S8_Seq2','cf_mpi_s1']
     for dset in tqdm(dset_list):
         frank_path='/data/panyuqing/frankmocap/hand_label_feat_right/'+ dset+'_frankhand'
         comp_img_fns=[]
         #indices=list(np.load(osp.join(data_path,'indices_del12.npy'), allow_pickle=True))
         #indices=[]
         if dset=='cf_mpi_s1':
-            #save_path='/data/panyuqing/experts/res/'#132 cf, psyai cf+mpi s1
+            #save_path='/data1/panyuqing/experts/res/'#132 cf, psyai cf+mpi s1
             all_image_name_path=osp.join(data_path,'comp_img_fns.npy')
         elif dset[:3]=='mpi':
             S_num=dset[4:]
             all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
-        if dset=='coco2017':
-            all_image_name_path=osp.join(data_path,dset+'_train_comp_img_fns.npy')
-        if dset=='3dpw_train':
+        elif dset[:4]=='h36m':
+            S_num=dset[5:]
             all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
+        elif dset=='coco2017':
+            all_image_name_path=osp.join(data_path,dset+'_train_comp_img_fns.npy')
+        elif dset=='3dpw_train':
+            all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
+        
         comp_img_fns=list(np.load(all_image_name_path, allow_pickle=True))
 
         # S_num_list=['S2_Seq2','S3_Seq2',]#'S4_Seq2','S5_Seq2','S6_Seq2','S7_Seq2','S8_Seq2',
@@ -150,7 +154,7 @@ if __name__ == '__main__':
         #comp_img_fns=comp_img_fns[32420:]
         for cfn in tqdm(comp_img_fns):
             #cfn=comp_img_fns[idx]    
-            img_name=cfn.split('/')[-1].split('.')[0]
+            img_name=cfn.split('/')[-1].replace('.jpg','')#.split('.')[0]
             #logger.info('cfn: {}',cfn)
 
             # left_hand_crop_path=osp.join(save_path,img_name,img_name+'_Left_hand_crop.jpg') 
@@ -185,7 +189,8 @@ if __name__ == '__main__':
                         right_hand_pose=globe_right_hand_pose[1:]   
                         right_hand_feat=hands['right_hand']['save_feat']
 
-            if (left_hand_pose is not None) or (right_hand_pose is not None):
+            #if (left_hand_pose is not None) or (right_hand_pose is not None):
+            if True: # generate vertices for each images of Human3.6m because no vertice generated in pseudo_gt.py
                 if dset[:3]=='mpi':
                     save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'mpi',S_num,img_name + '.npy')
                     #new_save_3dparam_vertices_path=os.path.join(new_save_3dparam_vertices_dir, 'mpi',S_num,img_name + '.npy')
@@ -195,7 +200,8 @@ if __name__ == '__main__':
                         save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'mpi',S_num, img_name + '.npy')
                     else:
                         save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'curated_fits', img_name + '.npy')
-                    
+                elif dset[:4]=='h36m':
+                    save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'h36m',img_name + '.npy')
                 else:
                     save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, dset,img_name + '.npy')
                     #new_save_3dparam_vertices_path=os.path.join(new_save_3dparam_vertices_dir, 'curated_fits',img_name + '.npy')
