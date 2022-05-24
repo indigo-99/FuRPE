@@ -24,7 +24,7 @@ import torch.nn as nn
 
 from loguru import logger
 
-from .attention import build_attention_head, build_attention_head_online
+from .attention import build_attention_head
 
 
 class SMPLXNet(nn.Module):
@@ -37,7 +37,6 @@ class SMPLXNet(nn.Module):
         self.net_type = network_cfg.get('type', 'attention')
         if self.net_type == 'attention':
             self.smplx = build_attention_head(exp_cfg)
-            self.smplx_online = build_attention_head_online(exp_cfg)
         else:
             raise ValueError(f'Unknown network type: {self.net_type}')
 
@@ -52,12 +51,6 @@ class SMPLXNet(nn.Module):
 
     def get_head_model(self) -> nn.Module:
         return self.smplx.get_head_model()
-
-    def get_teacher_model(self) -> nn.Module:
-        return self.smplx
-    
-    def get_online_model(self) -> nn.Module:
-        return self.smplx_online
 
     def toggle_param_prediction(self, iteration) -> None:
         self.smplx.toggle_param_prediction(iteration)
@@ -77,10 +70,5 @@ class SMPLXNet(nn.Module):
                             hand_imgs=hand_imgs, hand_targets=hand_targets,
                             head_imgs=head_imgs, head_targets=head_targets,
                             full_imgs=full_imgs)
-        with torch.no_grad():
-            output_online = self.smplx_online(images, targets=targets,
-                                hand_imgs=hand_imgs, hand_targets=hand_targets,
-                                head_imgs=head_imgs, head_targets=head_targets,
-                                full_imgs=full_imgs)
 
-        return output, output_online
+        return output

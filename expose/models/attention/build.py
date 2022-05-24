@@ -17,6 +17,7 @@
 import torch
 
 from .predictor import SMPLXHead
+from .predictor_online import SMPLXHead_online
 
 
 def build_attention_head(cfg):
@@ -24,3 +25,10 @@ def build_attention_head(cfg):
     build the motion capture model: create a SMPLXHead instance defined in predictor.py
     '''
     return SMPLXHead(cfg)
+
+def build_attention_head_online(cfg):
+    '''
+    build the online motion capture model: create a SMPLXHead instance defined in predictor_online.py
+    '''
+    return SMPLXHead_online(cfg)
+

@@ -14,4 +14,4 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-from .build import build_attention_head
+from .build import build_attention_head, build_attention_head_online

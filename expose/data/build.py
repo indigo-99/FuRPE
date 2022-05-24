@@ -188,7 +188,7 @@ class MemoryPinning(object):
         )
 
 # process a batch of data (deal with inconformity of images' shape and targets' type)
-def collate_batch(batch, use_shared_memory=False, return_full_imgs=False,
+def collate_batch_raw(batch, use_shared_memory=False, return_full_imgs=False,
                   pin_memory=True):
     if return_full_imgs:
         images, cropped_images, targets, _ = zip(*batch)
@@ -240,6 +240,91 @@ def collate_batch(batch, use_shared_memory=False, return_full_imgs=False,
         return full_img_list, torch.cat(
             out_cropped_images, 0, out=out), out_targets
 
+def collate_batch(batch, use_shared_memory=False, return_full_imgs=False,
+                  pin_memory=True):
+    if return_full_imgs:
+        # batch1, batch2 = zip(*batch)
+        # logger.info('batch len: {}',len(batch))# wrong: 36
+        # logger.info('batch1 len: {}',len(batch1))
+        # logger.info('batch2 len: {}',len(batch2))
+        images1, cropped_images1, targets1, _ , images2, cropped_images2, targets2, _= zip(*batch)
+        #images2, cropped_images2, targets2, _ = batch2
+    else:
+        batch1, batch2 = zip(*batch)
+        _, cropped_images1, targets1, _ = batch1
+        _, cropped_images2, targets2, _ = batch2
+    
+    # for batch1
+    out_targets1 = []
+    for t in targets1:
+        if t is None:
+            continue
+        if type(t) == list:
+            out_targets1 += t
+        else:
+            out_targets1.append(t)
+    out_cropped_images1 = []
+    for img in cropped_images1:
+        if img is None:
+            continue
+        if len(img.shape) < 4:
+            img.unsqueeze_(dim=0)
+        out_cropped_images1.append(img.clone())
+
+    if len(out_cropped_images1) < 1:
+        return None, None, None
+
+    full_img_list1 = None
+    if return_full_imgs:
+        #  full_img_list = to_image_list(images)
+        full_img_list1 = images1
+    out1 = None
+    if use_shared_memory:
+        numel = sum([x.numel() for x in out_cropped_images1 if x is not None])
+        storage = out_cropped_images1[0].storage()._new_shared(numel)
+        out1 = out_cropped_images1[0].new(storage)
+    
+    # for batch2
+    out_targets2 = []
+    for t in targets2:
+        if t is None:
+            continue
+        if type(t) == list:
+            out_targets2 += t
+        else:
+            out_targets2.append(t)
+    out_cropped_images2 = []
+    for img in cropped_images2:
+        if img is None:
+            continue
+        if len(img.shape) < 4:
+            img.unsqueeze_(dim=0)
+        out_cropped_images2.append(img.clone())
+
+    if len(out_cropped_images2) < 1:
+        return None, None, None
+
+    full_img_list2 = None
+    if return_full_imgs:
+        #  full_img_list = to_image_list(images)
+        full_img_list2 = images2
+    out2 = None
+    if use_shared_memory:
+        numel = sum([x.numel() for x in out_cropped_images2 if x is not None])
+        storage = out_cropped_images2[0].storage()._new_shared(numel)
+        out2 = out_cropped_images2[0].new(storage)
+    
+    # output
+    batch.clear()
+    if pin_memory:
+        batch_new1 = MemoryPinning(full_img_list1,torch.cat(out_cropped_images1, 0, out=out1),out_targets1)
+        batch_new2 = MemoryPinning(full_img_list2,torch.cat(out_cropped_images2, 0, out=out2),out_targets2)
+        return batch_new1, batch_new2
+
+    else:
+        batch_new1 = [full_img_list1, torch.cat(out_cropped_images1, 0, out=out1), out_targets1]
+        batch_new2 = [full_img_list2, torch.cat(out_cropped_images2, 0, out=out2), out_targets2]
+        return batch_new1, batch_new2
 
 def make_equal_sampler(datasets, batch_size=32, shuffle=True, ratio_2d=0.5):
     '''

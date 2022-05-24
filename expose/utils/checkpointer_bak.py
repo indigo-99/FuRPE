@@ -130,20 +130,9 @@ class Checkpointer(object):
         if 'smplx.head_idxs' in ckpt_data['model']:
             del ckpt_data['model']['smplx.head_idxs']
 
-        # change for loading raw ckpt
-        # new_ckpt={}
-        # for key in ckpt_data['model']:
-        #     if ("smplx." in key):
-        #         new_ckpt[key[6:]] = ckpt_data['model'][key]
-        for key in ckpt_data['model']:
-            if ("smplx." in key):
-                ckpt_data['model'][key[6:]] = ckpt_data['model'][key]
-                del ckpt_data['model'][key]
-
         missing, unexpected = self.model.load_state_dict(
-            ckpt_data['model'], strict=False) #not load_pretrained)
-            #new_ckpt, strict=False)
-
+            #  ckpt_data['model'], strict=not load_pretrained)
+            ckpt_data['model'], strict=False)
         if len(missing) > 0:
             logger.warning(
                 f'The following keys were not found: {missing}')

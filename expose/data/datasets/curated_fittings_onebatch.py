@@ -175,13 +175,13 @@ class CuratedFittings(dutils.Dataset):
             if osp.exists(all_image_name_path):
                 self.comp_img_fns=list(np.load(all_image_name_path, allow_pickle=True))
                 raw_len=len(self.comp_img_fns)
-                for p in add_image_name_path:
-                    if osp.exists(p):
-                        # add new data filenames to the training data list
-                        self.comp_img_fns+=list(np.load(p, allow_pickle=True))
+                # for p in add_image_name_path:
+                #     if osp.exists(p):
+                #         # add new data filenames to the training data list
+                #         self.comp_img_fns+=list(np.load(p, allow_pickle=True))
             
             # add human3.6m data
-            S_num_list=['S1','S5','S6','S7','S8','S9','S11'] 
+            S_num_list=['S1','S5','S6','S7','S8']#,'S9','S11'] 
             add_h36m_path=[osp.join(data_path,'h36m_'+S_num+'_comp_img_fns_del05.npy') for S_num in S_num_list]
             for i in range(len(add_h36m_path)):
                 add_path=add_h36m_path[i]
@@ -351,7 +351,7 @@ class CuratedFittings(dutils.Dataset):
 
     def only_2d(self):
         return False
-
+    
     def __getitem__(self, index):
         '''
         get a data item with targeted labels from the dataloader
@@ -508,8 +508,7 @@ class CuratedFittings(dutils.Dataset):
             # build the targeted label for this data item
             target = Keypoints2D(
                 output_keypoints2d, img.shape, flip_axis=0, dtype=self.dtype)
-            target2 = Keypoints2D(
-                output_keypoints2d, img.shape, flip_axis=0, dtype=self.dtype)
+
             # add 3d joints if exist in param3d_vertices_data:
             # keypoints3d=None
             # if 'keypoints3d' in param3d_vertices_data:
@@ -525,13 +524,11 @@ class CuratedFittings(dutils.Dataset):
             if 'save_feature_body' in param3d_vertices_data:
                 save_feature_body=param3d_vertices_data['save_feature_body'].to(torch.float32)#torch.size[1, 1024]
                 target.add_field('save_feature_body', save_feature_body)
-                target2.add_field('save_feature_body', save_feature_body)
-                
+
             if has_head:
                 if 'save_feature_face' in param3d_vertices_data:
                     save_feature_face=param3d_vertices_data['save_feature_face'].to(torch.float32)#torch.size[1, 1024]
                     target.add_field('save_feature_face', save_feature_face)
-                    target2.add_field('save_feature_face', save_feature_face)
 
             if self.head_only:
                 keypoints = output_keypoints2d[self.head_idxs, :-1]
@@ -558,19 +555,12 @@ class CuratedFittings(dutils.Dataset):
                     'orig_left_hand_bbox',
                     BoundingBox(left_hand_bbox, img.shape, transform=False))
                 
-                left_hand_bbox_target2 = BoundingBox(left_hand_bbox, img.shape)
-                target2.add_field('left_hand_bbox', left_hand_bbox_target2)
-                target2.add_field(
-                    'orig_left_hand_bbox',
-                    BoundingBox(left_hand_bbox, img.shape, transform=False))
-                
                 if 'save_feature_left_hand' in param3d_vertices_data:
                     save_feature_left_hand=param3d_vertices_data['save_feature_left_hand'].to(torch.float32)#.cpu().numpy()
                     #save_feature_left_hand=torch.from_numpy(save_feature_left_hand).to(torch.float32)#torch.size[1, 1024]
                     
                     if save_feature_left_hand.numel():
                         target.add_field('save_feature_left_hand', save_feature_left_hand)
-                        target2.add_field('save_feature_left_hand', save_feature_left_hand)
                     else:
                         logger.info('empty npy? {}',save_3dparam_vertices_path)
                 else:
@@ -590,19 +580,12 @@ class CuratedFittings(dutils.Dataset):
                 target.add_field(
                     'orig_right_hand_bbox',
                     BoundingBox(right_hand_bbox, img.shape, transform=False))
-                
-                right_hand_bbox_target2 = BoundingBox(right_hand_bbox, img.shape)
-                target2.add_field('right_hand_bbox', right_hand_bbox_target2)
-                target2.add_field(
-                    'orig_right_hand_bbox',
-                    BoundingBox(right_hand_bbox, img.shape, transform=False))
 
                 if 'save_feature_right_hand' in param3d_vertices_data:
                     save_feature_right_hand=param3d_vertices_data['save_feature_right_hand'].to(torch.float32)#.cpu().numpy()
                     #save_feature_right_hand=torch.from_numpy(save_feature_right_hand).to(torch.float32)#torch.size[1, 1024]
                     if save_feature_right_hand.numel():
                         target.add_field('save_feature_right_hand', save_feature_right_hand)
-                        target2.add_field('save_feature_right_hand', save_feature_right_hand)
                     else:
                         logger.info('empty npy? {}',save_3dparam_vertices_path)
                 else:
@@ -620,12 +603,6 @@ class CuratedFittings(dutils.Dataset):
                 head_bbox_target = BoundingBox(head_bbox, img.shape)
                 target.add_field('head_bbox', head_bbox_target)
                 target.add_field(
-                    'orig_head_bbox',
-                    BoundingBox(head_bbox, img.shape, transform=False))
-
-                head_bbox_target2 = BoundingBox(head_bbox, img.shape)
-                target2.add_field('head_bbox', head_bbox_target2)
-                target2.add_field(
                     'orig_head_bbox',
                     BoundingBox(head_bbox, img.shape, transform=False))
 
@@ -653,60 +630,33 @@ class CuratedFittings(dutils.Dataset):
             target.add_field('orig_center', center)
             target.add_field('orig_bbox_size', bbox_size)
 
-            target2.add_field('center', center)
-            target2.add_field('scale', scale)
-            target2.add_field('bbox_size', bbox_size)
-            target2.add_field('keypoints_hd', output_keypoints2d)
-            target2.add_field('orig_center', center)
-            target2.add_field('orig_bbox_size', bbox_size)
-
             # return the ground truth params by adding them into the target, for training use
             # create several classes to wrap all the parameters (defined in expose/data/targets/)
             if self.return_params:
                 betas_field = Betas(betas=betas)
-                betas_field2 = Betas(betas=betas)
                 target.add_field('betas', betas_field)
-                target2.add_field('betas', betas_field2)
-                
                 global_pose_field = GlobalPose(global_pose=global_pose)
-                global_pose_field2 = GlobalPose(global_pose=global_pose)
                 target.add_field('global_pose', global_pose_field)
-                target2.add_field('global_pose', global_pose_field2)
-
                 body_pose_field = BodyPose(body_pose=body_pose)
-                body_pose_field2 = BodyPose(body_pose=body_pose)
                 target.add_field('body_pose', body_pose_field)
-                target2.add_field('body_pose', body_pose_field2)
                 
                 if has_head:
                     expression_field = Expression(expression=expression)
-                    expression_field2 = Expression(expression=expression)
                     target.add_field('expression', expression_field)
-                    target2.add_field('expression', expression_field2)
-                    
                     jaw_pose_field = JawPose(jaw_pose=jaw_pose)
-                    jaw_pose_field2 = JawPose(jaw_pose=jaw_pose)
                     target.add_field('jaw_pose', jaw_pose_field)
-                    target2.add_field('jaw_pose', jaw_pose_field2)
                 
                 if has_left_hand or has_right_hand:
                     if not has_left_hand:
                         hand_pose_field = HandPose(left_hand_pose=None,
                                                 right_hand_pose=right_hand_pose)
-                        hand_pose_field2 = HandPose(left_hand_pose=None,
-                                                right_hand_pose=right_hand_pose)
                     elif not has_right_hand:
                         hand_pose_field = HandPose(left_hand_pose=left_hand_pose,
-                                                right_hand_pose=None)
-                        hand_pose_field2 = HandPose(left_hand_pose=left_hand_pose,
                                                 right_hand_pose=None)
                     else:
                         hand_pose_field = HandPose(left_hand_pose=left_hand_pose,
                                                 right_hand_pose=right_hand_pose)
-                        hand_pose_field2 = HandPose(left_hand_pose=left_hand_pose,
-                                                right_hand_pose=right_hand_pose)
                     target.add_field('hand_pose', hand_pose_field)
-                    target2.add_field('hand_pose', hand_pose_field2)
                 else:
                     if output_keypoints2d[self.right_hand_idxs, -1].sum() > self.min_hand_keypoints:
                         logger.info('has right openpose (but no right pseudo label) img_fn: {}',img_fn)
@@ -720,38 +670,27 @@ class CuratedFittings(dutils.Dataset):
                                     [0, 5000, 0.5 * H],
                                     [0, 0, 1]], dtype=np.float32)
                 target.add_field('intrinsics', intrinsics)
-                target2.add_field('intrinsics', intrinsics)
                 
                 vertex_field = Vertices(
                     vertices_data, bc=self.bc, closest_faces=self.closest_faces)
-                vertex_field2 = Vertices(
-                    vertices_data, bc=self.bc, closest_faces=self.closest_faces)
                 target.add_field('vertices', vertex_field)
-                target2.add_field('vertices', vertex_field2)
             
             # add the img name to the target
             target.add_field('fname', f'{img_index:05d}.jpg')
-            target2.add_field('fname', f'{img_index:05d}.jpg')
             # add the dataset name to the target
             target.add_field('name', 'curated_fits')
-            target2.add_field('name', 'curated_fits')
-            #cropped_image = img
+            cropped_image = img
             # do transformation to imgs according to config.yaml
             if (self.transforms is not None):
                 force_flip = False
                 if is_right is not None:
                     force_flip = not is_right and self.hand_only
-                img1, cropped_image1, cropped_target1 = self.transforms(
+
+                img, cropped_image, cropped_target = self.transforms(
                     img, target, force_flip=force_flip)
-                img2, cropped_image2, cropped_target2 = self.transforms(
-                    img, target2, force_flip=force_flip)
 
-            batch1 = [img1, cropped_image1, cropped_target1, img_index]          
-            batch2 = [img2, cropped_image2, cropped_target2, img_index]
-            batch_out = batch1+batch2
-            return batch_out
-            #return batch1, batch2
-
+            return img, cropped_image, cropped_target, img_index
+        
         elif self.split == 'val':
             # during evaluation, use the raw code of expose (read the raw ground truth label, not pseudo ones)
             return self.get_item_val(index)

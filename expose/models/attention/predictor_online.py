@@ -65,7 +65,7 @@ from expose.data.utils import flip_pose, bbox_iou, center_size_to_bbox
 from expose.utils.typing_utils import Tensor
 
 
-class SMPLXHead(nn.Module):
+class SMPLXHead_online(nn.Module):
     '''
     the class of the main pose estimation model 
     '''
@@ -74,7 +74,7 @@ class SMPLXHead(nn.Module):
         exp_cfg: CfgNode,
         dtype=torch.float32
     ) -> None:
-        super(SMPLXHead, self).__init__()
+        super(SMPLXHead_online, self).__init__()
 
         network_cfg = exp_cfg.get('network', {})
         attention_net_cfg = network_cfg.get('attention', {})
@@ -219,6 +219,8 @@ class SMPLXHead(nn.Module):
         )
 
         body_model_cfg = exp_cfg.get('body_model', {})
+        #logger.info('body_model_cfg: {}', body_model_cfg)
+        
         body_use_face_contour = body_model_cfg.get('use_face_contour', True)
         logger.info('use_face_contour: {}',body_model_cfg.get('use_face_contour'))
         
@@ -650,6 +652,14 @@ class SMPLXHead(nn.Module):
         self.head_soft_weight_loss = build_loss(**head_soft_weight_loss_cfg)
         self.head_soft_weight_loss_weight = head_soft_weight_loss_cfg.get(
             'weight', 0.0)
+        
+        # add predictor to wrap the output of online model
+        # self.predictor = nn.Sequential(
+        #     nn.Linear(projection_size, mlp_hidden_size, bias=False),
+        #     nn.BatchNorm1d(mlp_hidden_size),
+        #     nn.ReLU(True),
+        #     nn.Linear(mlp_hidden_size, projection_size, bias=False)
+        # )
 
     def _build_merge_func(
             self, cfg: CfgNode,
