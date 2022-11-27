@@ -1,8 +1,7 @@
 # FuRPE
 Official code of FuRPE: Learning Full-body Reconstruction from Part Experts.
 
-![image](https://github.com/indigo-99/FuRPE/blob/master/pipelinefig.jpg)
-
+![image](https://github.com/indigo-99/FuRPE/blob/390ac03c1b2f3826ca5de5b5f8209a1c1a39e7c9/pipelinefig.jpg)
 
 Full-body reconstruction is a fundamental but challenging task. Owing to the lack of annotated data, the performances of existing methods are largely limited. In this paper, we propose a novel method named Full-body Reconstruction from Part Experts (FuRPE) to tackle this issue. In
 FuRPE, the network is trained using pseudo labels and features generated from part-experts. An simple yet effective pseudo ground-truth selection scheme is proposed to extract high-quality pseudo labels. In this way, a large-scale of existing human body reconstruction datasets can be leveraged and contribute to the model training. In addition, an exponential moving average training strategy is introduced to train the network in a self-supervised manner, further boosting the performance of the model. Extensive experiments on several widely used datasets demonstrate the effectiveness of our method over the baseline. Our method achieves the state-of-the-art performance. Code will be publicly available for further research.
