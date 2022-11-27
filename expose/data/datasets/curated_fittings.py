@@ -175,7 +175,7 @@ class CuratedFittings(dutils.Dataset):
             if osp.exists(all_image_name_path):
                 self.comp_img_fns=list(np.load(all_image_name_path, allow_pickle=True))
                 raw_len=len(self.comp_img_fns)
-                for p in add_image_name_path:
+                '''for p in add_image_name_path: 
                     if osp.exists(p):
                         # add new data filenames to the training data list
                         self.comp_img_fns+=list(np.load(p, allow_pickle=True))
@@ -189,7 +189,40 @@ class CuratedFittings(dutils.Dataset):
                     self.comp_img_fns+=list(np.load(add_path, allow_pickle=True))
                     logger.info('h36m_{} filenames npy exist~',S_num_list[i])
                 else:
-                    logger.info('No h36m_{} filenames npy exist!',S_num_list[i]) 
+                    logger.info('No h36m_{} filenames npy exist!',S_num_list[i]) '''
+
+            # add posetrack data
+            S_num_list=['val','train','test'] #['eft'] 
+            add_posetrack_path=[osp.join(data_path,'posetrack_'+S_num+'_comp_img_fns_del05.npy') for S_num in S_num_list]
+            for i in range(len(add_posetrack_path)):
+                add_path=add_posetrack_path[i]
+                if osp.exists(add_path):
+                    self.comp_img_fns+=list(np.load(add_path, allow_pickle=True))
+                    logger.info('posetrack_{} filenames npy exist~',S_num_list[i])
+                else:
+                    logger.info('No posetrack_{} filenames npy exist!',S_num_list[i]) 
+            
+            # add ochuman data
+            '''S_num_list=['all'] 
+            add_ochuman_path=[osp.join(data_path,'ochuman_'+S_num+'_comp_img_fns_del05.npy') for S_num in S_num_list]
+            for i in range(len(add_ochuman_path)):
+                add_path=add_ochuman_path[i]
+                if osp.exists(add_path):
+                    self.comp_img_fns+=list(np.load(add_path, allow_pickle=True))
+                    logger.info('ochuman_{} filenames npy exist~',S_num_list[i])
+                else:
+                    logger.info('No ochuman_{} filenames npy exist!',S_num_list[i]) '''
+            
+            # add CMU data
+            '''S_num_list=['all'] 
+            add_CMU_path=[osp.join(data_path,'CMU_'+S_num+'_comp_img_fns_del05.npy') for S_num in S_num_list]
+            for i in range(len(add_CMU_path)):
+                add_path=add_CMU_path[i]
+                if osp.exists(add_path):
+                    self.comp_img_fns+=list(np.load(add_path, allow_pickle=True))
+                    logger.info('CMU_{} filenames npy exist~',S_num_list[i])
+                else:
+                    logger.info('No CMU_{} filenames npy exist!',S_num_list[i]) '''
 
             # add coco2017 data             
             #add_coco2017_path=osp.join(data_path,'coco2017_train_comp_img_fns_del05.npy') 
@@ -387,7 +420,12 @@ class CuratedFittings(dutils.Dataset):
                     save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, '3dpw_train',img_name + '.npy')
                 elif 'h36m' in img_dir:
                     save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, 'h36m',img_name + '.npy')
-                
+                elif 'posetrack' in img_dir:
+                    save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, 'posetrack',img_name + '.npy')
+                elif 'ochuman' in img_dir:
+                    save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, 'ochuman',img_name + '.npy')
+                elif 'CMU' in img_dir:
+                    save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, 'CMU',img_name + '.npy')
                 else:#mpi
                     S_num=img_dir.split('/')[-2] #S1/S2_Seq1,  [-1] is empty
                     save_3dparam_vertices_path=os.path.join(self.save_3dparam_vertices, 'mpi',S_num,img_name + '.npy')
@@ -523,13 +561,19 @@ class CuratedFittings(dutils.Dataset):
             
             # add pseudo ground truth of features into the target for feature distiling during training
             if 'save_feature_body' in param3d_vertices_data:
-                save_feature_body=param3d_vertices_data['save_feature_body'].to(torch.float32)#torch.size[1, 1024]
+                if torch.is_tensor(param3d_vertices_data['save_feature_body']):
+                    save_feature_body=param3d_vertices_data['save_feature_body'].to(torch.float32)#torch.size[1, 1024]
+                else:
+                    save_feature_body=torch.from_numpy(param3d_vertices_data['save_feature_body']).to(torch.float32)
                 target.add_field('save_feature_body', save_feature_body)
                 target2.add_field('save_feature_body', save_feature_body)
                 
             if has_head:
                 if 'save_feature_face' in param3d_vertices_data:
-                    save_feature_face=param3d_vertices_data['save_feature_face'].to(torch.float32)#torch.size[1, 1024]
+                    if torch.is_tensor(param3d_vertices_data['save_feature_face']):
+                        save_feature_face=param3d_vertices_data['save_feature_face'].to(torch.float32)#torch.size[1, 1024]
+                    else:
+                        save_feature_face=torch.from_numpy(param3d_vertices_data['save_feature_face']).to(torch.float32)
                     target.add_field('save_feature_face', save_feature_face)
                     target2.add_field('save_feature_face', save_feature_face)
 
@@ -565,8 +609,10 @@ class CuratedFittings(dutils.Dataset):
                     BoundingBox(left_hand_bbox, img.shape, transform=False))
                 
                 if 'save_feature_left_hand' in param3d_vertices_data:
-                    save_feature_left_hand=param3d_vertices_data['save_feature_left_hand'].to(torch.float32)#.cpu().numpy()
-                    #save_feature_left_hand=torch.from_numpy(save_feature_left_hand).to(torch.float32)#torch.size[1, 1024]
+                    if torch.is_tensor(param3d_vertices_data['save_feature_left_hand']):
+                        save_feature_left_hand=param3d_vertices_data['save_feature_left_hand'].to(torch.float32)#.cpu().numpy()
+                    else:
+                        save_feature_left_hand=torch.from_numpy(param3d_vertices_data['save_feature_left_hand']).to(torch.float32)#torch.size[1, 1024]
                     
                     if save_feature_left_hand.numel():
                         target.add_field('save_feature_left_hand', save_feature_left_hand)
@@ -598,8 +644,11 @@ class CuratedFittings(dutils.Dataset):
                     BoundingBox(right_hand_bbox, img.shape, transform=False))
 
                 if 'save_feature_right_hand' in param3d_vertices_data:
-                    save_feature_right_hand=param3d_vertices_data['save_feature_right_hand'].to(torch.float32)#.cpu().numpy()
-                    #save_feature_right_hand=torch.from_numpy(save_feature_right_hand).to(torch.float32)#torch.size[1, 1024]
+                    if torch.is_tensor(param3d_vertices_data['save_feature_right_hand']):
+                        save_feature_right_hand=param3d_vertices_data['save_feature_right_hand'].to(torch.float32)#.cpu().numpy()
+                    else:
+                        save_feature_right_hand=torch.from_numpy(param3d_vertices_data['save_feature_right_hand']).to(torch.float32)#torch.size[1, 1024]
+                    
                     if save_feature_right_hand.numel():
                         target.add_field('save_feature_right_hand', save_feature_right_hand)
                         target2.add_field('save_feature_right_hand', save_feature_right_hand)

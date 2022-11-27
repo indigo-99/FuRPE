@@ -294,7 +294,7 @@ class RandomRotation(object):
             rot = min(2 * self.rotation_factor,
                       max(-2 * self.rotation_factor,
                           np.random.randn() * self.rotation_factor))
-            if np.random.uniform() <= 0.6:
+            if np.random.uniform() <= 0.6:#0.3
                 rot = 0
         if rot == 0.0:
             return image, target

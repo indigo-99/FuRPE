@@ -30,7 +30,7 @@ from expose.data.datasets import ImageFolder, ImageFolderWithBoxes
 from expose.data.targets.image_list import to_image_list
 from expose.utils.checkpointer import Checkpointer
 
-from expose.data.build import collate_batch
+from expose.data.build import collate_batch, collate_batch_raw
 from expose.data.transforms import build_transforms
 
 from expose.models.smplx_net import SMPLXNet
@@ -69,49 +69,6 @@ def save_img(save_imgs_path='/data/panyuqing/expose_experts/testvideo_img/',vide
         vc.release()
         print('save_success')
         print(folder_name)
-
-#P add: read output overlay imgs and generate a demo video
-def gen_video_out_ffmpeg(in_dir, out_dir, video_name):
-    in_dir = osp.abspath(in_dir)
-    os.makedirs(out_dir,exist_ok=True)
-    out_path = osp.abspath(osp.join(out_dir, video_name+'.mp4'))
-    logger.info(">> Generating video in {}",out_path)
-    #ffmpeg_cmd = f'ffmpeg -y -f image2 -framerate 25 -pattern_type glob -i "{in_dir}/*.png"  -pix_fmt yuv420p -c:v libx264 -x264opts keyint=25:min-keyint=25:scenecut=-1 -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" {out_path}'
-    ffmpeg_cmd = f'ffmpeg -y -f image2 -framerate 25 -i "{in_dir}/{video_name}_%d.png" {out_path}'
-    os.system(ffmpeg_cmd)
-
-def gen_video_out(in_dir, out_dir, video_name):
-    in_dir = osp.abspath(in_dir)
-    os.makedirs(out_dir,exist_ok=True)
-    out_path = osp.abspath(osp.join(out_dir, video_name+'.mp4'))
-    logger.info(">> Generating video in {}",out_path)
-    
-    pic_names=os.listdir(in_dir)
-    pic_names=sorted(pic_names)
-    pic_paths=[osp.join(in_dir,pn) for pn in pic_names]
-    first_frame=cv2.imread(pic_paths[0])
-    
-    fps=25#20
-    width = first_frame.shape[1]  #1200
-    height = first_frame.shape[0]  #1200
-    if max(width,height)>1080:
-        scale=2
-    else: 
-        scale=1
-    size = (int(width/scale), int(height/scale))
-    videowriter = cv2.VideoWriter(out_path,
-                                  cv2.VideoWriter_fourcc('M', 'P', '4', 'V'),
-                                  fps, size)
-    for i in range(len(pic_paths)):
-        fr = cv2.imread(pic_paths[i])
-        # attention! width, height
-        img = cv2.resize(fr, size, interpolation=cv2.INTER_LINEAR)
-        #print('img size: ',img.shape)
-        #print(int(fr.shape[0]/2), int(fr.shape[1]/2))
-        #videowriter.write(fr)
-        videowriter.write(img)
-    print("Finish generating video: ",out_path)
-    videowriter.release()
 
 def collate_fn(batch):
     output_dict = dict()
@@ -196,8 +153,8 @@ def preprocess_images(
         img_paths, bboxes, scale_factor=scale_factor, transforms=transforms)
 
     expose_collate = functools.partial(
-        collate_batch, use_shared_memory=num_workers > 0,
-        return_full_imgs=True)
+        collate_batch_raw, use_shared_memory=num_workers > 0,
+        return_full_imgs=True) #collate_batch change to collate_batch_raw , for evalutate ema
     expose_dloader = dutils.DataLoader(
         expose_dset,
         batch_size=batch_size,
@@ -294,24 +251,20 @@ def main(
     os.makedirs(demo_output_folder, exist_ok=True)
 
     # initialize the motion-capture model
-    model = SMPLXNet(exp_cfg)
+    self_supervised_EMA_model = SMPLXNet(exp_cfg)
     try:
-        model = model.to(device=device)
+        self_supervised_EMA_model = self_supervised_EMA_model.to(device=device)
     except RuntimeError:
         # Re-submit in case of a device error
         sys.exit(3)
-
+    model = self_supervised_EMA_model.get_online_model()
     # load checkpoints to the model
     output_folder = exp_cfg.output_folder
     checkpoint_folder = osp.join(output_folder, exp_cfg.checkpoint_folder)
     checkpointer = Checkpointer(
         model, save_dir=checkpoint_folder, pretrained=exp_cfg.pretrained)
 
-    # arguments = {'iteration': 0, 'epoch_number': 0}
     extra_checkpoint_data = checkpointer.load_checkpoint()
-    # for key in arguments:
-    #     if key in extra_checkpoint_data:
-    #         arguments[key] = extra_checkpoint_data[key]
 
     model = model.eval()
 
@@ -339,8 +292,8 @@ def main(
 
         torch.cuda.synchronize()
         start = time.perf_counter()
-        model_output = model(body_imgs, body_targets, full_imgs=full_imgs,
-                             device=device)
+        model_output = model(body_imgs, body_targets, full_imgs=full_imgs)
+                             #device=device)#change for evalutate ema
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - start
         cnt += 1
@@ -421,9 +374,10 @@ def main(
             
             for idx in tqdm(range(len(body_targets)), 'Saving ...'):
                 fname = body_targets[idx].get_field('fname')
-                # if len(fname)>6:
-                #     logger.info('too long video! frame name over 6 nums! {}',fname)
-                # fname=int(fname)
+                logger.info('fname: {}',fname)
+                '''if len(fname)>6:
+                    logger.info('too long video! frame name over 6 nums! {}',fname)
+                fname=int(fname)'''
                 curr_img = out_img['hd_overlay']
                 if comparing:
                     #logger.info('hd_img[idx] shape: {}',hd_imgs[idx].shape)#(1440,2560,4)
@@ -441,11 +395,6 @@ def main(
 
     logger.info(f'Average inference time: {total_time / cnt}')
     
-    logger.info(f'Generating demo videos.')
-    out_dir = '/data/panyuqing/expose_experts/testvideo_res'
-    video_name = image_folder.split('/')[-1]#'stand'#'sit'
-    gen_video_out(in_dir = demo_output_folder, out_dir = out_dir, video_name = video_name)
-
 
 if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True

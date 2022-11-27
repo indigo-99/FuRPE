@@ -50,7 +50,7 @@ def build_optimizer(
             weight_decay = optim_cfg.weight_decay_bias
         #add for smaller lr of hand sub-network
         #if key in hand_model_params:#'smplx.hand_predictor.'+hand_model_params=key
-        if 'hand_predictor' in key:#if 'hand_predictor.backbone' in key:
+        if 'hand_predictor.regressor' in key: #if 'hand_predictor' in key:#if 'hand_predictor.backbone' in key:
             lr=lr*0.0001
 
         if len(exclude) > 0 and exclude in key:

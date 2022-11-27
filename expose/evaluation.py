@@ -142,7 +142,7 @@ class Evaluator(object):
 
         self.body_alignments = {'procrustes': ProcrustesAlignmentMPJPE(),
                                 'pelvis': PelvisAlignmentMPJPE(),
-                                'root':RootAlignmentMPJPE(), # not used in expose's experiments
+                                #'root':RootAlignmentMPJPE(), # not used in expose's experiments
                                 }
         '''hand_fscores_thresh = exp_cfg.get('fscores_thresh', {}).get(
             'hand', [5.0 / 1000, 15.0 / 1000])
@@ -566,8 +566,8 @@ class Evaluator(object):
                     body_imgs, body_targets,
                     hand_imgs=hand_imgs, hand_targets=hand_targets,
                     head_imgs=head_imgs, head_targets=head_targets,
-                    full_imgs=full_imgs,
-                    device=device)
+                    full_imgs=full_imgs)#,
+                    #device=device)#change for evalutate ema
 
                 body_vertices = None
                 body_output = model_output.get('body')
@@ -724,13 +724,13 @@ class Evaluator(object):
                             'jv,bvm->bjm', self.J14_regressor, body_vertices)
                         
                         # when evaluating EHF, quit this commentting
-                        # gt_joints14 = np.einsum(
-                            # 'jv,bvm->bjm', self.J14_regressor, gt_vertices) 
-                        # when evaluating 3DPW, quit this commentting
                         gt_joints14 = np.einsum(
-                            'jv,bvm->bjm', self.J14_regressor_SMPL, gt_vertices)[:,H36M_TO_J14,:] # get 14 joints from 17 H36m joints
-                        #error = np.sqrt(((pred_joints - gt_joints14) ** 2).sum(axis=-1)).mean(axis=-1)
-                        #logger.info('mpjpe from spin: {}',error)
+                            'jv,bvm->bjm', self.J14_regressor, gt_vertices) 
+                        # when evaluating 3DPW, quit this commentting
+                        #gt_joints14 = np.einsum(
+                            #'jv,bvm->bjm', self.J14_regressor_SMPL, gt_vertices)[:,H36M_TO_J14,:] # get 14 joints from 17 H36m joints
+                        ##error = np.sqrt(((pred_joints - gt_joints14) ** 2).sum(axis=-1)).mean(axis=-1)
+                        ##logger.info('mpjpe from spin: {}',error)
 
                         for alignment_name, alignment in alignments.items():
                             for bidx in range(gt_joints14.shape[0]):

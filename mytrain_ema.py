@@ -143,7 +143,7 @@ class ExTrainer(object):
         save_fn = osp.join(self.checkpoint_folder, 'latest_checkpoint')
         if osp.exists(save_fn):
             # load checkpoint weights into self.model
-            extra_checkpoint_data = self.ckpt.load_checkpoint() #self.ckpt.load_checkpoint_change()
+            extra_checkpoint_data = self.ckpt.load_checkpoint(removesmplx = True) #self.ckpt.load_checkpoint_change()
             if 'epoch_count' in extra_checkpoint_data:
                 self.epoch_count = extra_checkpoint_data['epoch_count'] 
                 logger.info('already trained model epoch_number: {}',self.epoch_count )
@@ -231,15 +231,15 @@ class ExTrainer(object):
         # pose loss
         # keypoint loss
         ot_loss = 0.0
-        ot_loss += self.regression_loss(online_params['final']['global_orient'],teacher_params['final']['global_orient'], 'global_orient')
-        ot_loss += self.regression_loss(online_params['final']['body_pose'],teacher_params['final']['body_pose'], 'body_pose')
-        ot_loss += self.regression_loss(online_params['final']['left_hand_pose'],teacher_params['final']['left_hand_pose'],'left_hand_pose')
-        ot_loss += self.regression_loss(online_params['final']['right_hand_pose'],teacher_params['final']['right_hand_pose'],'right_hand_pose')
-        ot_loss += self.regression_loss(online_params['final']['jaw_pose'],teacher_params['final']['jaw_pose'],'jaw_pose')
-        ot_loss += self.regression_loss(online_params['final']['betas'],teacher_params['final']['betas'],'betas')
-        ot_loss += self.regression_loss(online_params['final']['expression'],teacher_params['final']['expression'],'expression')
-        ot_loss += self.regression_loss(online_params['final']['proj_joints'],teacher_params['final']['proj_joints'],'proj_joints')
-        
+        ot_loss += self.regression_loss(online_params['final']['global_orient'],teacher_params['final']['global_orient'], factor=5 , item_name='global_orient')
+        ot_loss += self.regression_loss(online_params['final']['body_pose'],teacher_params['final']['body_pose'], factor=5 , item_name='body_pose')
+        ot_loss += self.regression_loss(online_params['final']['left_hand_pose'],teacher_params['final']['left_hand_pose'], factor=5 , item_name='left_hand_pose')
+        ot_loss += self.regression_loss(online_params['final']['right_hand_pose'],teacher_params['final']['right_hand_pose'], factor=5 , item_name='right_hand_pose')
+        ot_loss += self.regression_loss(online_params['final']['jaw_pose'],teacher_params['final']['jaw_pose'], factor=5 , item_name='jaw_pose')
+        ot_loss += self.regression_loss(online_params['final']['betas'],teacher_params['final']['betas'], factor=5 , item_name='betas')
+        ot_loss += self.regression_loss(online_params['final']['expression'],teacher_params['final']['expression'], factor=5 , item_name='expression')
+        ot_loss += self.regression_loss(online_params['final']['proj_joints'],teacher_params['final']['proj_joints'], factor=5 , item_name='proj_joints')
+         
         '''
         ['final']['global_orient']
         ['final']['body_pose']
@@ -251,13 +251,13 @@ class ExTrainer(object):
         ['final']['proj_joints']'''
         return ot_loss
         
-    def regression_loss(self, x, y, item_name):
+    def regression_loss(self, x, y, factor = 1, item_name = None):
         if x is not None and y is not None:
             norm_x = F.normalize(x, dim=1)
             norm_y = F.normalize(y, dim=1)
-            loss = 2 - 2 * (norm_x * norm_y).sum() / x.size(0)
-            logger.info('norm_x: {}, norm_y: {}', norm_x[0], norm_y[0])
-            logger.info('item_name: {}, regression_loss: {}',item_name, loss)
+            loss = 2 - 2 * (norm_x * norm_y).sum() / x.numel()#x.size(0)
+            loss = loss * factor
+            #logger.info('item_name: {}, regression_loss: {}',item_name, loss)
         else:
             loss = 0.0
         return loss

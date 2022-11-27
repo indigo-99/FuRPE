@@ -29,7 +29,7 @@ def build_transforms(transf_cfg, is_train):
         downsample_dist = transf_cfg.get('downsample_dist', 'categorical')#categorical,  will randomly choose a value in downsample_cat_factors
         #if set to be 'uniform', will randomly choose a value between downsample_factor_min and downsample_factor_max
         downsample_cat_factors = transf_cfg.get(
-            'downsample_cat_factors', (1.0, ))#1.0  may be changed to (1,0,2,0,...,10,0)
+            'downsample_cat_factors', (1.0, ))#body only: 1.0, hand/head (1.0,1.2,...,8.0)
         downsample_factor_min = transf_cfg.get('downsample_factor_min', 1.0)#1.0
         downsample_factor_max = transf_cfg.get('downsample_factor_max', 1.0)#1.0 
         scale_factor = transf_cfg.get('scale_factor', 0.0)#0.25
@@ -73,17 +73,17 @@ def build_transforms(transf_cfg, is_train):
         cat_factors=downsample_cat_factors,
         factor_min=downsample_factor_min,
         factor_max=downsample_factor_max)
-
+    logger.debug('downsample {}', downsample)
     # return a series of transformation methods, defined in .transform.py
     transform = T.Compose(
         [
-            T.BBoxCenterJitter(center_jitter_factor, dist=center_jitter_dist),
-            T.RandomHorizontalFlip(flip_prob),
+            T.BBoxCenterJitter(center_jitter_factor, dist=center_jitter_dist),#return body directly because center_jitter_factor<1e-3, while hand/head 0.2
+            T.RandomHorizontalFlip(flip_prob),#random
             T.RandomRotation(
-                is_train=is_train, rotation_factor=rotation_factor),
-            crop,
-            pixel_noise,
-            downsample,
+                is_train=is_train, rotation_factor=rotation_factor),#random rotation between[0-30°], has 60% possibility not to rotate
+            crop,#random
+            pixel_noise,#random
+            downsample,#return body directly because only one category factor in configs
             T.ToTensor(),
             normalize_transform,
         ]

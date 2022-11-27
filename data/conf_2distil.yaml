@@ -860,8 +860,7 @@ network:
         init_type: xavier
         layers:
         - 1024
-        - 2048 #- 1024
-        - 1024 #empty 
+        - 1024 # + a layer of 2048 useless
         lrelu_slope: 0.2
         norm_type: none
         num_groups: 32

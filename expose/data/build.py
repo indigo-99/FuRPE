@@ -456,21 +456,30 @@ def make_all_data_loaders(exp_cfg, split='train', start_iter=0, **kwargs):
     return_full_imgs = (network_cfg.get('apply_hand_network_on_body', True) or
                         network_cfg.get('apply_head_network_on_body', True))
     logger.info(f'Return full resolution images: {return_full_imgs}')
-    body_collate_fn = functools.partial(
-        collate_batch, use_shared_memory=body_num_workers > 0,
-        return_full_imgs=return_full_imgs)
-
+    
     hand_num_workers = hand_dsets_cfg.get(
         'num_workers', DEFAULT_NUM_WORKERS).get(split, 0)
-    hand_collate_fn = functools.partial(
-        collate_batch, use_shared_memory=hand_num_workers > 0)
-    #  collate_batch, use_shared_memory=False)
-
     head_num_workers = head_dsets_cfg.get(
         'num_workers', DEFAULT_NUM_WORKERS).get(split, 0)
-    head_collate_fn = functools.partial(
-        collate_batch, use_shared_memory=head_num_workers > 0)
-    #  collate_batch, use_shared_memory=False)
+
+    if is_train is True:
+        body_collate_fn = functools.partial(
+            collate_batch, use_shared_memory=body_num_workers > 0,
+            return_full_imgs=return_full_imgs)
+        hand_collate_fn = functools.partial(
+            collate_batch, use_shared_memory=hand_num_workers > 0)
+        #  collate_batch, use_shared_memory=False)      
+        head_collate_fn = functools.partial(
+            collate_batch, use_shared_memory=head_num_workers > 0)
+        #  collate_batch, use_shared_memory=False)
+    else:
+        body_collate_fn = functools.partial(
+            collate_batch_raw, use_shared_memory=body_num_workers > 0,
+            return_full_imgs=return_full_imgs)
+        hand_collate_fn = functools.partial(
+            collate_batch_raw, use_shared_memory=hand_num_workers > 0) 
+        head_collate_fn = functools.partial(
+            collate_batch_raw, use_shared_memory=head_num_workers > 0)
 
     body_batch_sampler, hand_batch_sampler, head_batch_sampler = [None] * 3
     # Equal sampling should only be used during training and only if there

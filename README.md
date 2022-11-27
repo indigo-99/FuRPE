@@ -21,6 +21,10 @@ We provide two training methods: the standard version [mytrain.py], and the mult
       - The same as the first one EXCEPT:<br>
         Add the idea of multi-task-learning (https://github.com/yaringal/multi-task-learning-example) into training, let the 3 part weights of body, hand and face to be trained together with the model.
 
+3. [mytrain_ema.py]  command (linux) :<br> ```CUDA_VISIBLE_DEVICES=GPU_ID(eg: 0/1) nohup python mytrain_ema.py --exp-cfg=data/config.yaml >log.train 2>&1 &```<br>
+      - The same as the first one EXCEPT:<br>
+        Add the idea of EMA (https://github.com/yichen928/STRL) into training, using the self-supervision loss.
+
 ### Evaluation
 We provide evaluation on EHF whole-body indoor dataset and another outdoor 3DPW testset (only body labels).<br>
 In addition, part specific evaluation on the hand and head sub-networks are also provided.
@@ -31,7 +35,9 @@ In addition, part specific evaluation on the hand and head sub-networks are also
    Before running the commond, the code of expose/evaluation.py need to be changed in line 723~729 to change the J_regressor from SMPL-X to SMPL because 3DPW only contains ground truth in SMPL formats.
    
 3. Hand evaluation on FREIHAND testset: <br>```CUDA_VISIBLE_DEVICES=GPU_ID(eg: 0/1) python inference_freihand.py --exp-cfg=data/config.yaml   --datasets=ehf  --show=False    --output-folder eval_output  --save-mesh=False  --save-params=False  --save-vis=False```<br>
-   The dataset authors don't publish the ground truth of the testset, so the code only generate predicted results. If evaluation metrics are needed, you can submit the result to its website. (https://competitions.codalab.org/competitions/21238#participate)
+   <br>```cd /data/panyuqing/freihand```<br>
+   <br>```python eval.py  /data/panyuqing/freihand/evaluation  /data/panyuqing/freihand/evaluation/output```<br>
+   The freihand code can be referenced and installed according to: https://github.com/lmb-freiburg/freihand
 
 4. Head evaluation on NoW testset: <br>```CUDA_VISIBLE_DEVICES=GPU_ID(eg: 0/1) python inference_nowface.py --exp-cfg=data/config.yaml   --datasets=ehf  --show=False    --output-folder eval_output  --save-mesh=False  --save-params=False  --save-vis=False```<br>
    The dataset authors also don't publish the ground truth of the testset, so the code only generate predicted results. If evaluation metrics are needed, you can submit the result to their mailbox. (https://ringnet.is.tue.mpg.de/download.php)

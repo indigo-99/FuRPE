@@ -688,10 +688,10 @@ class SMPLXHead_online(nn.Module):
                     output['merged'] = (
                         torch.where(
                             mask, from_part, from_body) if mask is not None
-                        else from_part
+                        else from_body#from_part
                     )
                 else:
-                    output['merged'] = from_part
+                    output['merged'] = from_body#from_part
                 output['weights'] = None
                 return output
             return func

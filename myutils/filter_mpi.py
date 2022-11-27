@@ -68,7 +68,7 @@ def check_kpt_conf(jname):
     else:
         return False
 
-dset='h36m'#'3dpw'#'mpi'
+dset='posetrack'#'ochuman'#'posetrack'#'h36m'#'3dpw'#'mpi'#CMU
 if dset=='mpi':
     indexes=[0,1,2,4,5,6,7,8]#S1:[1,2,4,5,6,7,8]
     S_num='S6'#['S2','S3','S4','S5','S6','S7','S8']
@@ -90,12 +90,12 @@ elif dset=='3dpw':
         'courtyard_golf_00', 'outdoors_freestyle_00', 'courtyard_goodNews_00',
         'outdoors_slalom_00', 'courtyard_jacket_00', 'outdoors_slalom_01',
     ]
-elif dset=='h36m':
-    S_num='S1'#['S1','S5','S6','S7','S8','S9','S11']
-    dataset_pre='/data/panyuqing/expose_traindata/h36m/'
+else: #'ochuman' 'posetrack' 'h36m' 'CMU'
+    S_num='train'#'all' #['eft','train','val','test'] #['S1','S5','S6','S7','S8','S9','S11']
+    dataset_pre='/data/panyuqing/expose_experts/add_data/'+dset+'/'
     raw_images_dir=dataset_pre+'images/'+S_num
     raw_keypoints_dir=dataset_pre+'keypoints2d_openpose/'+S_num+'_kpt'
-    target_dir='/data/panyuqing/expose_traindata/h36m/images_keypoints2d_filter/'+S_num
+    target_dir='/data/panyuqing/expose_experts/add_data/'+dset+'/images_keypoints2d_filter/'+S_num
     #logger.info('raw_images_dir: {}',raw_images_dir)
     #logger.info('raw_keypoints_dir: {}',raw_keypoints_dir)
 
@@ -127,7 +127,7 @@ elif dset=='3dpw':
             if (osp.exists(jname) and check_kpt_conf(jname)):
                 shutil.copyfile(jname, kpt_dir+t_d+'_'+pic_name+'_keypoints.json')
                 shutil.copyfile(pf , img_dir+t_d+'_'+pic_name+'.jpg' )
-elif dset=='h36m':
+else: # dset=='h36m' or dset=='posetrack'
     pic_files=os.listdir(raw_images_dir)
     for pf in tqdm(pic_files):
         pf_path=osp.join(raw_images_dir,pf)
@@ -140,10 +140,3 @@ elif dset=='h36m':
             shutil.copyfile(pf_path , img_dir+pic_name+'.jpg' )
 
 
-'''print(len(a))
-print(len(a['people']))
-print(a['people'][0].keys())
-print(len(a['people'][0]['pose_keypoints_2d']))
-for k in a['people'][0].keys():
-    print('key: ',k,' len: ',len(a['people'][0][k]))
-'''

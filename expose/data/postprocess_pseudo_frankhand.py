@@ -108,17 +108,11 @@ if __name__ == '__main__':
     save_3dparam_vertices_dir='/data1/panyuqing/expose_experts/data/params3d_v'
     #new_save_3dparam_vertices_dir='/data1/panyuqing/expose_experts/data/params3d_v_newmh'
     #os.makedirs(new_save_3dparam_vertices_dir, exist_ok=True)
-    #*********************************************
-    #dset='cf_mpi_s1'
-    #dset='mpi_S2_Seq2'
-    #dset='coco2017'
-    #dset='3dpw_train'
-    #*********************************************
     # os.makedirs(new_save_3dparam_vertices_dir+'/mpi', exist_ok=True)
     # os.makedirs(new_save_3dparam_vertices_dir+'/curated_fits', exist_ok=True)
     # os.makedirs(new_save_3dparam_vertices_dir+'/coco2017', exist_ok=True)
     # os.makedirs(new_save_3dparam_vertices_dir+'/3dpw_train', exist_ok=True)
-    dset_list=['h36m_S1']#['coco2017', '3dpw_train', 'mpi_S2_Seq2', 'mpi_S3_Seq2', 'mpi_S4_Seq2', 'mpi_S5_Seq2', 'mpi_S6_Seq2', 'mpi_S7_Seq2', 'mpi_S8_Seq2','cf_mpi_s1']
+    dset_list=['posetrack_train']#['posetrack_val']#['posetrack_test']#['CMU_all']#['ochuman_all'] #['posetrack_eft'] #['h36m_S1']#['coco2017', '3dpw_train', 'mpi_S2_Seq2', 'mpi_S3_Seq2', 'mpi_S4_Seq2', 'mpi_S5_Seq2', 'mpi_S6_Seq2', 'mpi_S7_Seq2', 'mpi_S8_Seq2','cf_mpi_s1']
     for dset in tqdm(dset_list):
         frank_path='/data/panyuqing/frankmocap/hand_label_feat_right/'+ dset+'_frankhand'
         comp_img_fns=[]
@@ -130,13 +124,16 @@ if __name__ == '__main__':
         elif dset[:3]=='mpi':
             S_num=dset[4:]
             all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
-        elif dset[:4]=='h36m':
-            S_num=dset[5:]
-            all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
         elif dset=='coco2017':
             all_image_name_path=osp.join(data_path,dset+'_train_comp_img_fns.npy')
         elif dset=='3dpw_train':
             all_image_name_path=osp.join(data_path,dset+'_comp_img_fns.npy')
+        else:
+            res=dset.split('_')
+            if len(res)==2:
+                S_num=res[1]
+                dset=res[0]
+            all_image_name_path=osp.join(data_path,dset+'_'+S_num+'_comp_img_fns.npy')
         
         comp_img_fns=list(np.load(all_image_name_path, allow_pickle=True))
 
@@ -200,25 +197,32 @@ if __name__ == '__main__':
                         save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'mpi',S_num, img_name + '.npy')
                     else:
                         save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'curated_fits', img_name + '.npy')
-                elif dset[:4]=='h36m':
-                    save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, 'h36m',img_name + '.npy')
-                else:
+                else: #dset=='h36m' 'posetrack' 'ochuman' /curated_fittings
                     save_3dparam_vertices_path=os.path.join(save_3dparam_vertices_dir, dset,img_name + '.npy')
                     #new_save_3dparam_vertices_path=os.path.join(new_save_3dparam_vertices_dir, 'curated_fits',img_name + '.npy')
                     
                 param3d_vertices_data=np.load(save_3dparam_vertices_path, allow_pickle=True).item()
+                if 'vertices' in param3d_vertices_data:
+                    if 'left_hand_pose' in param3d_vertices_data:
+                        left_num+=1
+                    if 'right_hand_pose' in param3d_vertices_data:
+                        right_num+=1
+                    continue #already finished this process, no need to duplicate
                 new_param3d_vertices_data={}
                 for k in param3d_vertices_data:
                     if torch.is_tensor(param3d_vertices_data[k]):
-                        new_param3d_vertices_data[k]=param3d_vertices_data[k].to(torch.float32)
+                        new_param3d_vertices_data[k]=param3d_vertices_data[k].to(torch.float32).detach().cpu().numpy()
                     elif type(param3d_vertices_data[k]) is np.ndarray:
                         new_param3d_vertices_data[k]=param3d_vertices_data[k].astype(np.float32)
                     else:
                         new_param3d_vertices_data[k]=param3d_vertices_data[k]
-
-                global_pose_mat=batch_rodrigues(torch.from_numpy(param3d_vertices_data['global_orient']).reshape(1, 3)).reshape(-1, 1, 3, 3)
-                body_pose_mat=batch_rodrigues(torch.from_numpy(param3d_vertices_data['body_pose'].reshape(21,3))).reshape(-1, 21, 3, 3)
-                betas_for_vert_model=torch.from_numpy(param3d_vertices_data['betas']).reshape(1, -1)
+                #if len(param3d_vertices_data['global_orient'])==4:
+                    #continue
+                global_pose_mat=batch_rodrigues(torch.from_numpy(new_param3d_vertices_data['global_orient']).reshape(1, 3)).reshape(-1, 1, 3, 3)
+                #else:
+                    #global_pose_mat=batch_rodrigues(torch.from_numpy(param3d_vertices_data['global_orient']).reshape(1, 3)).reshape(-1, 1, 3, 3)
+                body_pose_mat=batch_rodrigues(torch.from_numpy(new_param3d_vertices_data['body_pose'].reshape(21,3))).reshape(-1, 21, 3, 3)
+                betas_for_vert_model=torch.from_numpy(new_param3d_vertices_data['betas']).reshape(1, -1)
 
                 global_pose_mat=global_pose_mat.to(device)
                 body_pose_mat=body_pose_mat.to(device)
@@ -229,7 +233,7 @@ if __name__ == '__main__':
                     #'betas': betas_for_vert_model,
                 }
                 
-                if 'jaw_pose' in param3d_vertices_data:
+                if 'jaw_pose' in new_param3d_vertices_data:
                     expression_np=torch.from_numpy(new_param3d_vertices_data['expression']).reshape(1,-1)
                     expression_np=expression_np.to(device)
                     final_body_parameters['expression']= expression_np

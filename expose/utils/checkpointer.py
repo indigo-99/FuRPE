@@ -72,7 +72,7 @@ class Checkpointer(object):
             f.write(curr_ckpt_fn)
         ckpt_data.clear()
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, removesmplx = False):
         '''load the network's parameters '''
         save_fn = osp.join(self.save_dir, 'latest_checkpoint')
 
@@ -121,24 +121,30 @@ class Checkpointer(object):
             #del ckpt_data['model'][hk] 
         
         #add for test, because 3dpw testset not use_face_contour
-        if 'smplx.keyp_loss.face_idxs' in ckpt_data['model']:
-            del ckpt_data['model']['smplx.keyp_loss.face_idxs']
-        if 'smplx.body_loss.face_idxs' in ckpt_data['model']:
-            del ckpt_data['model']['smplx.body_loss.face_idxs']
-        if 'smplx.head_loss.head_idxs' in ckpt_data['model']:
-            del ckpt_data['model']['smplx.head_loss.head_idxs']
-        if 'smplx.head_idxs' in ckpt_data['model']:
-            del ckpt_data['model']['smplx.head_idxs']
+        if 'keyp_loss.face_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['keyp_loss.face_idxs']
+        if 'body_loss.face_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['body_loss.face_idxs']
+        if 'head_loss.head_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['head_loss.head_idxs']
+        if 'head_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['head_idxs']
+        if 'keyp_loss.face_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['keyp_loss.face_idxs']
+        if 'body_loss.face_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['body_loss.face_idxs']
+        if 'head_loss.head_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['head_loss.head_idxs']
+        if 'head_idxs' in ckpt_data['model']:
+            del ckpt_data['model']['head_idxs']
 
         # change for loading raw ckpt
-        # new_ckpt={}
-        # for key in ckpt_data['model']:
-        #     if ("smplx." in key):
-        #         new_ckpt[key[6:]] = ckpt_data['model'][key]
-        for key in ckpt_data['model']:
-            if ("smplx." in key):
-                ckpt_data['model'][key[6:]] = ckpt_data['model'][key]
-                del ckpt_data['model'][key]
+        if removesmplx:
+            keylist = list(ckpt_data['model'].keys())
+            for key in keylist:
+                if ("smplx." in key):
+                    ckpt_data['model'][key[6:]] = ckpt_data['model'][key]
+                    del ckpt_data['model'][key]
 
         missing, unexpected = self.model.load_state_dict(
             ckpt_data['model'], strict=False) #not load_pretrained)

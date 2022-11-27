@@ -100,9 +100,14 @@ class ImageFolderWithBoxes(dutils.Dataset):
         target.add_field('scale', scale)
 
         _, fname = osp.split(self.paths[index])
-        #target.add_field('fname', f'{fname}_{index:03d}')
         fname=fname.split('.')[0]
-        target.add_field('fname', f'{fname}')
+        target.add_field('fname', fname)
+        #target.add_field('fname', f'{fname}_{index:03d}')
+        # fname=fname.split('.')[0].split('_') #if the picture's name is 'sit_3.jpg', set fname='3'
+        # if fname[0].isdigit():
+        #     target.add_field('fname', f'{fname[0]}')
+        # else:
+        #     target.add_field('fname', f'{fname[1]}')
 
         if self.transforms is not None:
             full_img, cropped_image, target = self.transforms(img, target)

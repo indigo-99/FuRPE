@@ -125,7 +125,7 @@ if __name__ == '__main__':
     # react to import sys (change to another path, so change back here) 
     os.chdir('/data1/panyuqing/expose_experts') 
     #************* dataset name, should be changed when dealing with differenct datasets
-    dset= 'h36m' #'mpi' # 'coco2017' # '3dpw'
+    dset= 'posetrack'#CMU #'ochuman'#'posetrack' #'h36m' #'mpi' # 'coco2017' # '3dpw'
     #*************
     # the path to save cropped part images of body/hand/face
     save_crop_path = '/data1/panyuqing/experts/'#res
@@ -153,11 +153,11 @@ if __name__ == '__main__':
         add_path = '/data/panyuqing/expose_experts/add_data/3dpw/'+S_num+'/images'
         add_ktp_path = '/data/panyuqing/expose_experts/add_data/3dpw/'+S_num+'/keypoints2d'
         save_comp_path=osp.join(data_path,'3dpw_'+S_num+'_comp_img_fns.npy')
-    elif dset=='h36m':
-        S_num='S5' # ['S1','S5','S6','S7','S8','S9','S11']
-        add_path = '/data1/panyuqing/expose_experts/add_data/h36m/images_keypoints2d_filter/'+S_num+'/images'
-        add_ktp_path = '/data1/panyuqing/expose_experts/add_data/h36m/images_keypoints2d_filter/'+S_num+'/keypoints2d'
-        save_comp_path=osp.join(data_path,'h36m_'+S_num+'_comp_img_fns.npy')
+    else: #h36m, posetrack, ochuman
+        S_num='train' #'all' #['eft','train','val','test'] # ['S1','S5','S6','S7','S8','S9','S11']
+        add_path = '/data1/panyuqing/expose_experts/add_data/'+dset+'/images_keypoints2d_filter/'+S_num+'/images'
+        add_ktp_path = '/data1/panyuqing/expose_experts/add_data/'+dset+'/images_keypoints2d_filter/'+S_num+'/keypoints2d'
+        save_comp_path=osp.join(data_path,dset+'_'+S_num+'_comp_img_fns.npy')
     
     # if the data's namelist hasn't be generated, it means that the distiling process hasn't been completed
     if not osp.exists(save_comp_path):
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         #courtyard_warmWelcome_00_image_00512_keypoints.json
         img_fns=[ikpt.replace('_keypoints.json','')+'.jpg' for ikpt in img_fns_kpt]
         comp_img_fns=[osp.join(add_path,fn) for fn in img_fns]
-        del_indexes=distil_from_body_face_hands(comp_img_fns,save_crop_path,save_param_path)
+        del_indexes=distil_from_body_face_hands(comp_img_fns,save_crop_path,save_param_path,dset)
         # deleted indexes are the indexes of data whose body crops donnot exist (invalid data)
         logger.info('Distil_from_body_face_hands finishes!')
         os.chdir('/data1/panyuqing/expose_experts')
@@ -194,8 +194,8 @@ if __name__ == '__main__':
             save_3dparam_vertices_path=os.path.join(save_param_path, 'mpi',S_num,img_name + '.npy')
         elif dset=='3dpw':
             save_3dparam_vertices_path=os.path.join(save_param_path, '3dpw_train',img_name + '.npy')
-        elif dset=='h36m':
-            save_3dparam_vertices_path=os.path.join(save_param_path, 'h36m',img_name + '.npy') #S_num already in img_name
+        else: #dset=='h36m','posetrack','ochuman'
+            save_3dparam_vertices_path=os.path.join(save_param_path, dset, img_name + '.npy') #S_num already in img_name
 
         # read 3d params and save vertices
         if not osp.exists(save_3dparam_vertices_path):
@@ -204,6 +204,8 @@ if __name__ == '__main__':
      
         params_data = np.load(save_3dparam_vertices_path, allow_pickle=True).item()
         betas_for_vert_model=params_data['betas'].reshape(1,-1)
+        if type(betas_for_vert_model) is np.ndarray:
+            continue  #the picture has been post processed, thus no need to process again
         betas = betas_for_vert_model.detach().cpu().numpy().astype(np.float32)
 
         raw_body_pose_mat = params_data['body_pose'].detach().cpu().numpy().astype(np.float32) # 3*3 mat need to convert to 3

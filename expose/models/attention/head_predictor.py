@@ -154,8 +154,8 @@ class HeadPredictor(nn.Module):
 
         # Construct the head feature extraction backbone
         backbone_cfg = head_net_cfg.get('backbone', {})
-        self.backbone, feat_dims = build_backbone(backbone_cfg)
-
+        self.backbone, feat_dims = build_backbone(backbone_cfg) #resnet18, same as head_predictor.py
+      
         self.append_params = head_net_cfg.get('append_params', True)
         self.num_stages = head_net_cfg.get('num_stages', 1)
 
