@@ -58,11 +58,11 @@ from ..common.pose_utils import build_all_pose_params
 from ..camera import build_cam_proj, CameraParams
 from ...losses import build_loss
 
-from expose.data.targets import ImageList, ImageListPacked
-from expose.data.targets.keypoints import KEYPOINT_NAMES, get_part_idxs
-from expose.data.utils import flip_pose, bbox_iou, center_size_to_bbox
+from FuRPE.data.targets import ImageList, ImageListPacked
+from FuRPE.data.targets.keypoints import KEYPOINT_NAMES, get_part_idxs
+from FuRPE.data.utils import flip_pose, bbox_iou, center_size_to_bbox
 
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 
 class SMPLXHead_online(nn.Module):

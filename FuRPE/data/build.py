@@ -37,7 +37,7 @@ from .targets.generic_target import GenericTarget
 from .targets.image_list import to_image_list, ImageList
 from .transforms import build_transforms
 
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 DEFAULT_NUM_WORKERS = {
     'train': 0,

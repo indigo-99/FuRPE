@@ -25,18 +25,18 @@ import torch.utils.data as dutils
 from torchvision.models.detection import keypointrcnn_resnet50_fpn
 from torchvision.transforms import Compose, Normalize, ToTensor
 
-from expose.data.datasets import ImageFolder, ImageFolderWithBoxes
+from FuRPE.data.datasets import ImageFolder, ImageFolderWithBoxes
 
-from expose.data.targets.image_list import to_image_list
-from expose.utils.checkpointer import Checkpointer
+from FuRPE.data.targets.image_list import to_image_list
+from FuRPE.utils.checkpointer import Checkpointer
 
-from expose.data.build import collate_batch
-from expose.data.transforms import build_transforms
+from FuRPE.data.build import collate_batch
+from FuRPE.data.transforms import build_transforms
 
-from expose.models.smplx_net import SMPLXNet
-from expose.config import cfg
-from expose.config.cmd_parser import set_face_contour
-from expose.utils.plot_utils import HDRenderer
+from FuRPE.models.smplx_net import SMPLXNet
+from FuRPE.config import cfg
+from FuRPE.config.cmd_parser import set_face_contour
+from FuRPE.utils.plot_utils import HDRenderer
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))

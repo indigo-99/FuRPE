@@ -1,7 +1,7 @@
 # EXMODEL
 Official code of FuRPE: Learning Full-body Reconstruction from Part Experts.
 ![image]((https://github.com/indigo-99/exmodel/pipelinefig.jpg)
-A full-body human pose estimating model based on distilling 3 part experts' knowledge (body, hand, and face) and finetuning the EXPOSE model.
+FuRPE is based on distilling 3 part experts' knowledge (body, hand, and face) and finetuning the EXPOSE model.
 (https://github.com/vchoutas/expose)
 
 ## USER GUIDANCE

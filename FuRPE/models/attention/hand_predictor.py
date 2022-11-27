@@ -42,12 +42,12 @@ from ..common.pose_utils import build_pose_decoder
 from ..nnutils import init_weights
 from ..camera import CameraParams, build_cam_proj
 
-from expose.utils.rotation_utils import batch_rodrigues, batch_rot2aa
-from expose.data.targets.keypoints import KEYPOINT_NAMES
-from expose.data.utils import flip_pose
-from expose.data.targets.keypoints import FLIP_INDS
+from FuRPE.utils.rotation_utils import batch_rodrigues, batch_rot2aa
+from FuRPE.data.targets.keypoints import KEYPOINT_NAMES
+from FuRPE.data.utils import flip_pose
+from FuRPE.data.targets.keypoints import FLIP_INDS
 
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 # add mano model path for hand_only_training
 from manopth import manolayer

@@ -43,10 +43,10 @@ from ..common.networks import FrozenBatchNorm2d
 from ..common.pose_utils import build_pose_decoder
 from ..camera import build_cam_proj, CameraParams
 
-from expose.data.targets.keypoints import KEYPOINT_NAMES
-from expose.utils.rotation_utils import batch_rodrigues, batch_rot2aa
+from FuRPE.data.targets.keypoints import KEYPOINT_NAMES
+from FuRPE.utils.rotation_utils import batch_rodrigues, batch_rot2aa
 
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 
 class HeadPredictor(nn.Module):

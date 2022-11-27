@@ -27,10 +27,10 @@ from collections import defaultdict
 from loguru import logger
 
 from .rigid_alignment import RotationTranslationAlignment
-from expose.data.targets.keypoints import (
+from FuRPE.data.targets.keypoints import (
     get_part_idxs, KEYPOINT_NAMES, FACE_CONNECTIONS)
-from expose.losses import build_loss, build_prior
-from expose.utils.typing_utils import Tensor
+from FuRPE.losses import build_loss, build_prior
+from FuRPE.utils.typing_utils import Tensor
 
 
 PARAM_KEYS = ['betas', 'expression', 'global_orient', 'jaw_pose']

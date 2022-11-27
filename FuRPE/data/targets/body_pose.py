@@ -14,55 +14,67 @@
 #
 # Contact: ps-license@tuebingen.mpg.de
 
-
 import numpy as np
 
 import torch
-import cv2
-from loguru import logger
+
 from .generic_target import GenericTarget
-from expose.utils.rotation_utils import batch_rodrigues
+from FuRPE.utils.rotation_utils import batch_rodrigues
 
 # transpose
 FLIP_LEFT_RIGHT = 0
 FLIP_TOP_BOTTOM = 1
 
+sign_flip = np.array(
+    [1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1,
+        -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1,
+        -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1,
+        1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, 1, -1,
+        -1, 1, -1, -1])
 
-class GlobalPose(GenericTarget):
-    '''
-    store the global pose
-    '''
-    def __init__(self, global_pose, **kwargs):
-        super(GlobalPose, self).__init__()
-        self.global_pose = global_pose
+SIGN_FLIP = torch.tensor([6, 7, 8, 3, 4, 5, 9, 10, 11, 15, 16, 17,
+                          12, 13, 14, 18, 19, 20, 24, 25, 26, 21, 22, 23, 27,
+                          28, 29, 33, 34, 35, 30, 31, 32,
+                          36, 37, 38, 42, 43, 44, 39, 40, 41, 45, 46, 47, 51,
+                          52, 53, 48, 49, 50, 57, 58, 59, 54, 55, 56, 63, 64,
+                          65, 60, 61, 62],
+                         dtype=torch.long) - 3
+SIGN_FLIP = SIGN_FLIP.detach().numpy()
+
+
+class BodyPose(GenericTarget):
+    """ Stores the SMPL-HF params for all persons in an image
+    """
+
+    def __init__(self, body_pose, **kwargs):
+        super(BodyPose, self).__init__()
+        self.body_pose = body_pose
 
     def to_tensor(self, to_rot=True, *args, **kwargs):
-        if not torch.is_tensor(self.global_pose):
-            self.global_pose = torch.from_numpy(self.global_pose)
+        self.body_pose = torch.from_numpy(self.body_pose)
 
         if to_rot:
-            self.global_pose = batch_rodrigues(
-                self.global_pose.view(-1, 3)).view(1, 3, 3)
+            self.body_pose = batch_rodrigues(
+                self.body_pose.view(-1, 3)).view(-1, 3, 3)
 
         for k, v in self.extra_fields.items():
             if isinstance(v, GenericTarget):
                 v.to_tensor(*args, **kwargs)
 
     def transpose(self, method):
-
         if method not in (FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM):
             raise NotImplementedError(
                 "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
             )
 
-        if torch.is_tensor(self.global_pose):
-            dim_flip = torch.tensor([1, -1, -1], dtype=self.global_pose.dtype)
-            global_pose = self.global_pose.clone().squeeze() * dim_flip
+        if torch.is_tensor(self.body_pose):
+            dim_flip = torch.tensor([1, -1, -1], dtype=self.body_pose.dtype)
         else:
-            dim_flip = np.array([1, -1, -1], dtype=self.global_pose.dtype)
-            global_pose = self.global_pose.copy().squeeze() * dim_flip
+            dim_flip = np.array([1, -1, -1], dtype=self.body_pose.dtype)
 
-        field = type(self)(global_pose=global_pose)
+        body_pose = (self.body_pose.reshape(-1)[SIGN_FLIP].reshape(21, 3) *
+                     dim_flip).reshape(21 * 3).copy()
+        field = type(self)(body_pose=body_pose)
 
         for k, v in self.extra_fields.items():
             if isinstance(v, GenericTarget):
@@ -71,31 +83,18 @@ class GlobalPose(GenericTarget):
         self.add_field('is_flipped', True)
         return field
 
-    def rotate(self, rot=0, *args, **kwargs):
-        global_pose = self.global_pose.copy()
-        if rot != 0:
-            R = np.array([[np.cos(np.deg2rad(-rot)),
-                           -np.sin(np.deg2rad(-rot)), 0],
-                          [np.sin(np.deg2rad(-rot)),
-                           np.cos(np.deg2rad(-rot)), 0],
-                          [0, 0, 1]], dtype=np.float32)
+    def crop(self, rot=0, *args, **kwargs):
+        field = type(self)(body_pose=self.body_pose)
 
-            # find the rotation of the body in camera frame
-            per_rdg, _ = cv2.Rodrigues(global_pose)
-            # apply the global rotation to the global orientation
-            resrot, _ = cv2.Rodrigues(np.dot(R, per_rdg))
-            global_pose = (resrot.T)[0].reshape(3)
-        field = type(self)(global_pose=global_pose)
         for k, v in self.extra_fields.items():
             if isinstance(v, GenericTarget):
                 v = v.crop(rot=rot, *args, **kwargs)
             field.add_field(k, v)
-
         self.add_field('rot', rot)
         return field
 
     def to(self, *args, **kwargs):
-        field = type(self)(global_pose=self.global_pose.to(*args, **kwargs))
+        field = type(self)(body_pose=self.body_pose.to(*args, **kwargs))
         for k, v in self.extra_fields.items():
             if hasattr(v, "to"):
                 v = v.to(*args, **kwargs)

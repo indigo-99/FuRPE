@@ -24,14 +24,14 @@ import torch
 import resource
 
 #from expose.utils.plot_utils import HDRenderer
-from expose.config.cmd_parser import set_face_contour
-from expose.config import cfg
-from expose.models.smplx_net import SMPLXNet
-from expose.data import make_all_data_loaders
-from expose.utils.checkpointer import Checkpointer
-from expose.data.targets.image_list import to_image_list
+from FuRPE.config.cmd_parser import set_face_contour
+from FuRPE.config import cfg
+from FuRPE.models.smplx_net import SMPLXNet
+from FuRPE.data import make_all_data_loaders
+from FuRPE.utils.checkpointer import Checkpointer
+from FuRPE.data.targets.image_list import to_image_list
 
-from expose.evaluation import Evaluator
+from FuRPE.evaluation import Evaluator
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))

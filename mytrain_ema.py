@@ -26,20 +26,20 @@ import math
 
 import resource
 
-from expose.utils.plot_utils import (
+from FuRPE.utils.plot_utils import (
     create_skel_img, OverlayRenderer, GTRenderer,
     blend_images,
 )
-from expose.config.cmd_parser import set_face_contour
-from expose.config import cfg
-from expose.models.smplx_net import SMPLXNet
-from expose.data import make_all_data_loaders
+from FuRPE.config.cmd_parser import set_face_contour
+from FuRPE.config import cfg
+from FuRPE.models.smplx_net import SMPLXNet
+from FuRPE.data import make_all_data_loaders
 #from expose.data.pseudo_gt import save_pseudo_gt
-from expose.utils.checkpointer import Checkpointer
-from expose.data.targets.image_list import to_image_list
-from expose.data.targets.keypoints import KEYPOINT_NAMES
+from FuRPE.utils.checkpointer import Checkpointer
+from FuRPE.data.targets.image_list import to_image_list
+from FuRPE.data.targets.keypoints import KEYPOINT_NAMES
 
-from expose.optimizers import build_optimizer, build_scheduler
+from FuRPE.optimizers import build_optimizer, build_scheduler
 
 # limit the max num of files which can be opened (refer to EXPOSE's inference.py)
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)

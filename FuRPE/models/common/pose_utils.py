@@ -28,7 +28,7 @@ from loguru import logger
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from expose.utils.rotation_utils import batch_rodrigues, batch_rot2aa
+from FuRPE.utils.rotation_utils import batch_rodrigues, batch_rot2aa
 
 from .networks import MLP
 

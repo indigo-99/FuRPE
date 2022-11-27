@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from .generic_target import GenericTarget
 
-from expose.utils.rotation_utils import batch_rodrigues
+from FuRPE.utils.rotation_utils import batch_rodrigues
 
 # transpose
 FLIP_LEFT_RIGHT = 0

@@ -19,7 +19,7 @@ import sys
 import numpy as np
 import torch
 from loguru import logger
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 
 class ImageList(object):

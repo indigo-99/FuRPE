@@ -24,7 +24,7 @@ import torch
 from loguru import logger
 
 from .generic_target import GenericTarget
-from expose.utils.transf_utils import get_transform
+from FuRPE.utils.transf_utils import get_transform
 
 # transpose
 FLIP_LEFT_RIGHT = 0

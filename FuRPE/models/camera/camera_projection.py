@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from loguru import logger
-from expose.utils.typing_utils import Tensor, Array
+from FuRPE.utils.typing_utils import Tensor, Array
 
 DEFAULT_FOCAL_LENGTH = 5000
 

@@ -22,9 +22,9 @@ import torch.nn.functional as F
 
 from loguru import logger
 
-from expose.data.utils import points_to_bbox
-from expose.data.targets import ImageList, ImageListPacked, GenericTarget
-from expose.utils.typing_utils import Tensor
+from FuRPE.data.utils import points_to_bbox
+from FuRPE.data.targets import ImageList, ImageListPacked, GenericTarget
+from FuRPE.utils.typing_utils import Tensor
 
 
 class ToCrops(nn.Module):

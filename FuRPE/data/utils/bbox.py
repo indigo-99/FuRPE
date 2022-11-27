@@ -20,7 +20,7 @@ import torch
 import numpy as np
 from loguru import logger
 
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 
 def points_to_bbox(

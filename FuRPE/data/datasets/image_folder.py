@@ -28,8 +28,8 @@ from loguru import logger
 
 from ..utils import bbox_to_center_scale
 
-from expose.utils.img_utils import read_img
-from expose.data.targets import BoundingBox
+from FuRPE.utils.img_utils import read_img
+from FuRPE.data.targets import BoundingBox
 
 EXTS = ['.jpg', '.jpeg', '.png']
 

@@ -27,7 +27,7 @@ import torch.nn.functional as F
 from loguru import logger
 
 from ..nnutils import init_weights
-from expose.utils.typing_utils import Tensor
+from FuRPE.utils.typing_utils import Tensor
 
 
 def create_activation(activ_type='relu', lrelu_slope=0.2,
