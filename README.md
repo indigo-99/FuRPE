@@ -1,6 +1,8 @@
 # FuRPE
 Official code of FuRPE: Learning Full-body Reconstruction from Part Experts.
 
+Paper url: https://arxiv.org/pdf/2212.00731.pdf
+
 ![image](https://github.com/indigo-99/FuRPE/blob/390ac03c1b2f3826ca5de5b5f8209a1c1a39e7c9/pipelinefig.jpg)
 
 Full-body reconstruction is a fundamental but challenging task. Owing to the lack of annotated data, the performances of existing methods are largely limited. In this paper, we propose a novel method named Full-body Reconstruction from Part Experts (FuRPE) to tackle this issue. In
